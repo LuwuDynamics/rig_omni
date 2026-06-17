@@ -1,0 +1,84 @@
+[
+  {
+    "type": "anim",
+    "name": "eye_anim",
+    "align": "GFX_ALIGN_LEFT_MID",
+    "x": 0,
+    "y": 0,
+    "anim": {
+      "mirror": "false"
+    }
+  },
+  {
+    "type": "anim",
+    "name": "emerg_dlg",
+    "align": "GFX_ALIGN_LEFT_MID",
+    "x": 0,
+    "y": 0,
+    "anim": {
+      "mirror": "false"
+    }
+  },
+  {
+    "type": "label",
+    "name": "toast_label",
+    "align": "GFX_ALIGN_TOP_LEFT",
+    "x": 80,
+    "y": 24,
+    "width": 140,
+    "height": 24,
+    "label": {
+      "color": 16777215,
+      "text_align": "GFX_TEXT_ALIGN_CENTER",
+      "long_mode": {
+        "type": "GFX_LABEL_LONG_SCROLL",
+        "loop": true,
+        "speed": 10
+      }
+    }
+  },
+  {
+    "type": "label",
+    "name": "clock_label",
+    "align": "GFX_ALIGN_TOP_LEFT",
+    "x": -100,
+    "y": -100,
+    "width": 1,
+    "height": 1,
+    "label": {
+      "color": 0,
+      "text_align": "GFX_TEXT_ALIGN_CENTER",
+      "long_mode": {
+        "type": "GFX_LABEL_LONG_CLIP"
+      }
+    }
+  },
+  {
+    "type": "anim",
+    "name": "listen_anim",
+    "align": "GFX_ALIGN_TOP_MID",
+    "x": 0,
+    "y": 8,
+    "anim": {
+      "mirror": "false"
+    }
+  },
+  {
+    "type": "timer",
+    "name": "clock_timer",
+    "timer": {
+      "period": 1000,
+      "repeat_count": -1
+    }
+  },
+  {
+    "type": "qrcode",
+    "name": "qrcode",
+    "align": "GFX_ALIGN_CENTER",
+    "x": 0,
+    "y": 10,
+    "qrcode": {
+      "size": 120
+    }
+  }
+]

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RIG-Omni — 开源 ESP32-S3 机器人固件</title>
+  <meta name="description" content="开源 ESP32-S3 多形态智能机器人固件。语音 AI、EAF 动画、MCP 远程控制、多机器人架构。">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+      line-height: 1.6;
+    }
+    .hero {
+      padding: 80px 24px 60px;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: 20px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .hero .tags {
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 32px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .hero .cta {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent2);
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-outline {
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    .section {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    .section h2 {
+      font-size: 28px;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); }
+    .feature-card .icon { font-size: 28px; margin-bottom: 8px; }
+    .feature-card h3 { font-size: 16px; margin-bottom: 6px; }
+    .feature-card p { font-size: 14px; color: var(--muted); }
+
+    .arch-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      overflow-x: auto;
+    }
+    .arch-box pre {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+      white-space: pre;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+
+    .boards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .board-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+    }
+    .board-card .emoji { font-size: 48px; margin-bottom: 8px; }
+    .board-card h3 { font-size: 20px; margin-bottom: 4px; }
+    .board-card .desc { color: var(--muted); font-size: 14px; }
+
+    .footer {
+      text-align: center;
+      padding: 40px 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .lang-switch {
+      position: absolute;
+      top: 16px;
+      right: 24px;
+    }
+    .lang-switch a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .lang-switch a:hover { color: var(--text); border-color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 32px; }
+      .hero .subtitle { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div style="position: relative;">
+  <div class="lang-switch">
+    <a href="index.html">🇬🇧 EN</a>
+    <a href="index_zh.html">🇨🇳 中文</a>
+  </div>
+  <div class="hero">
+    <h1>RIG-Omni</h1>
+    <p class="subtitle">开源 ESP32-S3 多形态智能机器人固件</p>
+    <p class="tags">ESP32-S3 · 语音 AI · EAF 动画 · MCP 远程控制 · 多机器人架构</p>
+    <div class="cta">
+      <a href="https://github.com/Xgorobot/RIG-Omni" class="btn btn-primary">🌟 查看 GitHub</a>
+      <a href="https://github.com/Xgorobot/RIG-Omni/blob/main/README_CN.md" class="btn btn-outline">📖 中文文档</a>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>✨ 功能特性</h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="icon">🧠</div>
+      <h3>语音 AI</h3>
+      <p>离线唤醒词、云端 ASR/TTS、VAD 检测、AGC 增益——在微控制器上实现自然的语音交互。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🎭</div>
+      <h3>表情显示</h3>
+      <p>基于 LVGL 的 EAF 动画引擎，20+ 种表情，在 240×240 圆形 LCD 上动态切换。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🤖</div>
+      <h3>运动控制</h3>
+      <p>多舵机 & 轮式电机控制，IMU 姿态平衡，预设动作。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📡</div>
+      <h3>网络连接</h3>
+      <p>BluFi 蓝牙配网、OTA 固件升级、HMAC 设备激活。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🔧</div>
+      <h3>MCP 工具</h3>
+      <p>可扩展的远程指令框架——用代码控制你的机器人。</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📷</div>
+      <h3>摄像头</h3>
+      <p>ESP32-S3 摄像头集成，通过 MCP 工具实现快照。</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🤖 机器人形态</h2>
+  <div class="boards">
+    <div class="board-card">
+      <div class="emoji">🐶</div>
+      <h3>RIG-Puppy</h3>
+      <p class="desc">5 舵机机器狗<br>步态控制 · 头部跟随 · 表情动作</p>
+    </div>
+    <div class="board-card">
+      <div class="emoji">🛞</div>
+      <h3>RIG-Hover</h3>
+      <p class="desc">双轮气垫船<br>平衡控制 · 差速驱动 · 调试服务</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🏗️ 架构</h2>
+  <div class="arch-box">
+<pre>┌───────────────────────────────────────────┐
+│              应用层                        │
+│  语音 AI · 表情显示 · MCP · 摄像头 · OTA   │
+├───────────────────────────────────────────┤
+│            板型抽象层                       │
+│  ┌─────────────────────────────────────┐  │
+│  │        boards/common/               │  │
+│  │  IMU · BLE · 按键 · 电池 · …       │  │
+│  └─────────────────────────────────────┘  │
+│  ┌──────────────┐ ┌───────────────────┐   │
+│  │  boards/     │ │   boards/         │   │
+│  │   puppy/     │ │    hover/         │   │
+│  │  5舵机机器狗 │ │  双轮气垫船      │   │
+│  └──────────────┘ └───────────────────┘   │
+├───────────────────────────────────────────┤
+│          ESP-IDF 框架                      │
+│  WiFi · BLE · SPI · I2C · I2S · UART     │
+└───────────────────────────────────────────┘</pre>
+  </div>
+  <p style="margin-top: 16px; color: var(--muted); font-size: 14px;">
+    一份统一代码库，两种机器人形态。通用硬件驱动在 <code>boards/common/</code>，机器人专属逻辑在 <code>boards/puppy/</code> 和 <code>boards/hover/</code>。
+  </p>
+</div>
+
+<div class="section">
+  <h2>🔧 硬件</h2>
+  <table>
+    <tr><th>组件</th><th>接口</th><th>说明</th></tr>
+    <tr><td>GC9A01 圆形 LCD</td><td>SPI</td><td>240×240，通过 LVGL 播放 EAF 表情动画</td></tr>
+    <tr><td>IMU（QMI8658C）</td><td>I2C</td><td>6 轴姿态 + 平衡控制</td></tr>
+    <tr><td>舵机</td><td>UART（XGO）</td><td>Puppy: 5 舵机，Hover: 1 舵机 + 2 DC 电机</td></tr>
+    <tr><td>音频编解码器</td><td>I2S</td><td>单工/双工 麦克风 + 扬声器</td></tr>
+    <tr><td>摄像头（OV2640）</td><td>DVP</td><td>通过 MCP 工具实现快照</td></tr>
+    <tr><td>按键 + 触摸</td><td>GPIO</td><td>配网、对话切换、NVS 重置</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>🚀 快速开始</h2>
+  <div class="arch-box">
+<pre><code># 克隆仓库
+git clone https://github.com/Xgorobot/RIG-Omni.git
+cd RIG-Omni
+
+# 激活 ESP-IDF
+source ~/esp/esp-idf/export.sh
+
+# 配置板型
+idf.py set-target esp32s3
+idf.py menuconfig  # → RIG-Omni → Board Type → Puppy / Hover
+
+# 编译 & 烧录
+idf.py build
+idf.py -p /dev/ttyUSB0 flash monitor</code></pre>
+  </div>
+</div>
+
+<div class="footer">
+  <p>基于 <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> 协议 · Built with ❤️ by the RIG-Omni Team</p>
+</div>
+
+</body>
+</html>

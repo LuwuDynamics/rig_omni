@@ -1,0 +1,41 @@
+# ===== 构建产物 =====
+build/
+bin/
+dist/
+releases/
+tmp/
+test_firmware/
+
+# ===== ESP-IDF 组件与配置 =====
+components/
+managed_components/
+dependencies.lock
+sdkconfig
+sdkconfig.old
+*.bin
+
+# ===== 自动生成文件 =====
+main/mmap_generate_emoji.h
+mmap_generate_*.h
+
+# ===== 环境与缓存 =====
+.env
+.cache/
+.clangd
+
+# ===== IDE / 编辑器配置 =====
+.vscode/
+.devcontainer/
+.idea/
+.qoder/
+
+# ===== 操作系统文件 =====
+.DS_Store
+Thumbs.db
+
+# ===== Python 临时文件 =====
+*.pyc
+__pycache__/
+
+# ===== 已迁移至 tools/ 的开发脚本 =====
+scripts/

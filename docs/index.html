@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RIG-Omni — Open Source ESP32-S3 Robot Firmware</title>
+  <meta name="description" content="An open-source ESP32-S3 firmware for multipurpose intelligent robots. Voice AI, EAF animation, MCP remote control, multi-bot architecture.">
+  <style>
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --accent: #58a6ff;
+      --accent2: #3fb950;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .hero {
+      padding: 80px 24px 60px;
+      text-align: center;
+      max-width: 800px;
+      margin: 0 auto;
+    }
+    .hero h1 {
+      font-size: 48px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero .subtitle {
+      font-size: 20px;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .hero .tags {
+      font-size: 14px;
+      color: var(--accent);
+      margin-bottom: 32px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+    }
+    .hero .cta {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 15px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: var(--accent2);
+      color: #fff;
+    }
+    .btn-primary:hover { filter: brightness(1.15); }
+    .btn-outline {
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+    .section {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+    .section h2 {
+      font-size: 28px;
+      margin-bottom: 20px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 16px;
+    }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      transition: border-color 0.2s;
+    }
+    .feature-card:hover { border-color: var(--accent); }
+    .feature-card .icon { font-size: 28px; margin-bottom: 8px; }
+    .feature-card h3 { font-size: 16px; margin-bottom: 6px; }
+    .feature-card p { font-size: 14px; color: var(--muted); }
+
+    .arch-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 28px;
+      overflow-x: auto;
+    }
+    .arch-box pre {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      color: var(--text);
+      white-space: pre;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    th, td {
+      padding: 10px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+    }
+    th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: uppercase; }
+
+    .boards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 16px;
+    }
+    .board-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      text-align: center;
+    }
+    .board-card .emoji { font-size: 48px; margin-bottom: 8px; }
+    .board-card h3 { font-size: 20px; margin-bottom: 4px; }
+    .board-card .desc { color: var(--muted); font-size: 14px; }
+
+    .footer {
+      text-align: center;
+      padding: 40px 24px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .lang-switch {
+      position: absolute;
+      top: 16px;
+      right: 24px;
+    }
+    .lang-switch a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 14px;
+      padding: 4px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      transition: all 0.2s;
+    }
+    .lang-switch a:hover { color: var(--text); border-color: var(--accent); }
+
+    @media (max-width: 600px) {
+      .hero h1 { font-size: 32px; }
+      .hero .subtitle { font-size: 16px; }
+    }
+  </style>
+</head>
+<body>
+
+<div style="position: relative;">
+  <div class="lang-switch">
+    <a href="index.html">🇬🇧 EN</a>
+    <a href="index_zh.html">🇨🇳 中文</a>
+  </div>
+  <div class="hero">
+    <h1>RIG-Omni</h1>
+    <p class="subtitle">An Open-Source ESP32-S3 Firmware for Multipurpose Intelligent Robots</p>
+    <p class="tags">ESP32-S3 · Voice AI · EAF Animation · MCP Remote Control · Multi-Bot Architecture</p>
+    <div class="cta">
+      <a href="https://github.com/Xgorobot/RIG-Omni" class="btn btn-primary">🌟 View on GitHub</a>
+      <a href="README.md" class="btn btn-outline">📖 Full README</a>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>✨ Features</h2>
+  <div class="features-grid">
+    <div class="feature-card">
+      <div class="icon">🧠</div>
+      <h3>Voice AI</h3>
+      <p>Offline wake word, cloud ASR/TTS, VAD, AGC — natural voice interaction on a microcontroller.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🎭</div>
+      <h3>Emotion Display</h3>
+      <p>EAF animation engine on LVGL, 20+ expressions with dynamic transitions on a 240×240 round LCD.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🤖</div>
+      <h3>Motion Control</h3>
+      <p>Multi-servo & wheel motor control with IMU-based balance and preset actions.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📡</div>
+      <h3>Connectivity</h3>
+      <p>BluFi provisioning, OTA firmware updates, HMAC device activation.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">🔧</div>
+      <h3>MCP Tools</h3>
+      <p>Extensible remote command framework — control your robot programmatically.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon">📷</div>
+      <h3>Camera</h3>
+      <p>ESP32-S3 camera integration with snapshot capabilities via MCP.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🤖 Robot Forms</h2>
+  <div class="boards">
+    <div class="board-card">
+      <div class="emoji">🐶</div>
+      <h3>RIG-Puppy</h3>
+      <p class="desc">5-Servo Robot Dog<br>Gait control · Head tracking · Emotive actions</p>
+    </div>
+    <div class="board-card">
+      <div class="emoji">🛞</div>
+      <h3>RIG-Hover</h3>
+      <p class="desc">2-Wheel Hovercraft<br>Balance control · Differential drive · Debug server</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h2>🏗️ Architecture</h2>
+  <div class="arch-box">
+<pre>┌───────────────────────────────────────────┐
+│            Application Layer               │
+│  Voice AI  ·  Emote Display  ·  MCP  ·    │
+│  Camera Tools  ·  OTA                     │
+├───────────────────────────────────────────┤
+│          Board Abstraction                 │
+│  ┌─────────────────────────────────────┐  │
+│  │        boards/common/               │  │
+│  │  IMU · BLE · Button · Battery · …  │  │
+│  └─────────────────────────────────────┘  │
+│  ┌──────────────┐ ┌───────────────────┐   │
+│  │  boards/     │ │   boards/         │   │
+│  │   puppy/     │ │    hover/         │   │
+│  │  5-Servo Dog │ │  2-Wheel Hover    │   │
+│  └──────────────┘ └───────────────────┘   │
+├───────────────────────────────────────────┤
+│          ESP-IDF Framework                 │
+│  WiFi · BLE · SPI · I2C · I2S · UART     │
+└───────────────────────────────────────────┘</pre>
+  </div>
+  <p style="margin-top: 16px; color: var(--muted); font-size: 14px;">
+    One unified codebase, two robot forms. Common hardware drivers in <code>boards/common/</code>, robot-specific logic in <code>boards/puppy/</code> and <code>boards/hover/</code>.
+  </p>
+</div>
+
+<div class="section">
+  <h2>🔧 Hardware</h2>
+  <table>
+    <tr><th>Component</th><th>Interface</th><th>Details</th></tr>
+    <tr><td>GC9A01 Round LCD</td><td>SPI</td><td>240×240, EAF emotion animations via LVGL</td></tr>
+    <tr><td>IMU (QMI8658C)</td><td>I2C</td><td>6-axis attitude + balance control</td></tr>
+    <tr><td>Servo Motors</td><td>UART (XGO)</td><td>Puppy: 5 servos, Hover: 1 servo + 2 DC motors</td></tr>
+    <tr><td>Audio Codec</td><td>I2S</td><td>Simplex/Duplex mic + speaker</td></tr>
+    <tr><td>Camera (OV2640)</td><td>DVP</td><td>Snapshot via MCP tools</td></tr>
+    <tr><td>Buttons + Touch</td><td>GPIO</td><td>WiFi config, chat toggle, NVS reset</td></tr>
+  </table>
+</div>
+
+<div class="section">
+  <h2>🚀 Quick Start</h2>
+  <div class="arch-box">
+<pre><code># Clone & enter
+git clone https://github.com/Xgorobot/RIG-Omni.git
+cd RIG-Omni
+
+# Source ESP-IDF
+source ~/esp/esp-idf/export.sh
+
+# Configure board type
+idf.py set-target esp32s3
+idf.py menuconfig  # → RIG-Omni → Board Type → Puppy / Hover
+
+# Build & flash
+idf.py build
+idf.py -p /dev/ttyUSB0 flash monitor</code></pre>
+  </div>
+</div>
+
+<div class="footer">
+  <p>Licensed under <a href="https://www.apache.org/licenses/LICENSE-2.0">Apache 2.0</a> · Built with ❤️ by the RIG-Omni Team</p>
+</div>
+
+</body>
+</html>

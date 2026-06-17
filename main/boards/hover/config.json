@@ -1,0 +1,7 @@
+{
+    "target": "esp32s3",
+    "display": true,
+    "camera": true,
+    "psram": true,
+    "description": "LuLu Robot ESP32S3 - XGO Robot Dog with GC9A01 240x240 Round Display"
+}
