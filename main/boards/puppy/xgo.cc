@@ -236,6 +236,23 @@ void ReadMotorState(uint8_t ID){
 	SendMotorCommand(bBuf, 8);
 }
 
+float servo_voltage = 0.0;  // ID=1 舵机电池电压
+
+void ReadServoVoltage(uint8_t readID){
+    uint8_t bBuf[8];
+    uint8_t CheckSum = 0;
+    bBuf[0] = 0xff;
+    bBuf[1] = 0xff;
+    bBuf[2] = readID;
+    bBuf[3] = 0x04;
+    bBuf[4] = 0x02;
+    bBuf[5] = 0x40;      // PRESENT_VOLTAGE 寄存器
+    bBuf[6] = 0x01;      // 读取 1 字节
+    CheckSum = readID + 0x04 + 0x02 + 0x40 + 0x01;
+    bBuf[7] = ~CheckSum;
+    SendMotorCommand(bBuf, 8);
+}
+
 void EnableMotor(uint8_t ID, uint8_t mode){
 	uint8_t bBuf[8];
     uint8_t CheckSum = 0;
@@ -343,7 +360,7 @@ void xgo_rx(){
                     rxFlag = 3;
                     break;
             case 3:
-                if(res == 0x08||res == 0x0B)
+                if(res == 0x08||res == 0x0B||res == 0x03)
                     {					
                         rxFlag = 4; 
                         rxBuffer[3] = res;
@@ -363,7 +380,11 @@ void xgo_rx(){
                         checkSum += rxBuffer[2+i];
                     }
                     checkSum = ~checkSum;
-                    if(checkSum == rxBuffer[3+rxDataLen]){          
+                    if(checkSum == rxBuffer[3+rxDataLen]){
+                        if (rxDataLen == 3) {
+                            // PRESENT_VOLTAGE 响应: 1 字节电压值 (0.1V 精度)
+                            servo_voltage = rxBuffer[5] * 0.1f;
+                        } else {          
                         POS_LOW_Byte =  rxBuffer[rxDataLen - 1];
                         POS_HIGH_Byte =  rxBuffer[rxDataLen];
                         VEL_LOW_Byte =  rxBuffer[rxDataLen - 3];
@@ -379,6 +400,7 @@ void xgo_rx(){
                             id = id + 1;
                             // 检测堵转（位置偏差 + 扭矩）
                             CheckMotorStall(id);
+                        }
                         }	 
                     }
                     checkSum = 0;
@@ -490,8 +512,14 @@ void xgo_control() {
         ReadMotorState(read_id);
         counter = 0;
         read_id++;
-        if(read_id > 6){
+        if(read_id > MOTOR_NUM){
             read_id = 1;
+        }
+
+        // 每分钟读一次电池电压（1200 个周期 × 50ms = 60s）
+        static int voltage_counter_puppy = 0;
+        if (++voltage_counter_puppy % 1200 == 0) {
+            ReadServoVoltage(1);
         }
     }
 }

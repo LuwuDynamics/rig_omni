@@ -13,6 +13,7 @@
 #include "application.h"
 #include "display.h"
 #include "oled_display.h"
+#include "assets/lang_config.h"
 #include "board.h"
 #include "settings.h"
 #include "lvgl_theme.h"
@@ -45,7 +46,7 @@ void McpServer::AddCommonTools() {
     AddTool("self.get_device_status",
         "Provides the real-time information of the device, including the current status of the audio speaker, screen, battery, network, etc.\n"
         "Use this tool for: \n"
-        "1. Answering questions about current condition (e.g. what is the current volume of the audio speaker?)\n"
+        "1. Answering questions about current condition (e.g. what is the current volume of the audio speaker? what is the battery level? is the device charging?)\n"
         "2. As the first step to control the device (e.g. turn up / down the volume of the audio speaker, etc.)",
         PropertyList(),
         [&board](const PropertyList& properties) -> ReturnValue {
@@ -100,8 +101,8 @@ void McpServer::AddCommonTools() {
     auto camera = board.GetCamera();
     if (camera) {
         AddTool("self.camera.take_photo",
-            "拍照并识别内容。当用户让你看某样东西、识别物体、看看这是什么时调用此工具\n"
-            "Take a photo and explain it. Use this tool when user asks to see/identify something.\n"
+            "拍照并识别内容。当用户让你看某样东西、识别物体、看看这是什么时调用此工具，仅用于需要AI分析照片内容的场景\n"
+            "Take a photo and explain it. Use this tool ONLY when user asks to see/identify/analyze something.\n"
             "Args:\n"
             "  `question`: 关于照片的问题 / The question about the photo.\n"
             "Return:\n"
@@ -121,8 +122,8 @@ void McpServer::AddCommonTools() {
             });
 
         AddTool("self.camera.preview",
-            "拍照并显示到屏幕。当用户说拍张照、拍个照片、看看摄像头时调用此工具\n"
-            "Take a photo and display on screen without AI analysis.\n"
+            "拍照并显示到屏幕。当用户说拍张照、拍个照片、拍一张照片、给我拍张照、看看摄像头、拍照时调用此工具，仅用于拍照显示不需要AI分析的场景\n"
+            "Take a photo and display on screen without AI analysis. Use this when user just wants to take a photo.\n"
             "Return:\n"
             "  true if captured successfully.",
             PropertyList(),
@@ -133,6 +134,8 @@ void McpServer::AddCommonTools() {
                 if (!camera->Capture()) {
                     throw std::runtime_error("Failed to capture photo");
                 }
+                // 预览模式无需上传，立即归还帧缓冲防止相机缓冲区耗尽
+                camera->ReleaseFrame();
                 return true;
             });
     }
@@ -182,6 +185,30 @@ void McpServer::AddCommonTools() {
             ESP_LOGI("McpServer", "Power mode set to: %s (sleep_mode=%d)", mode_name.c_str(), sleep_enabled);
             return std::string("Power mode set to: " + mode_name);
         });
+
+    // Language control
+    AddTool("self.set_language",
+        "Set the device display and voice language.\n"
+        "Args:\n"
+        "  `language`: Language code - `zh-CN` (Simplified Chinese) or `en-US` (English)\n"
+        "Return:\n"
+        "  The current language code applied.",
+        PropertyList({
+            Property("language", kPropertyTypeString)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            auto lang = properties["language"].value<std::string>();
+            if (lang == "en-US") {
+                Lang::SetLanguage(Lang::Code::en_US);
+                return std::string("Language set to: en-US");
+            } else if (lang == "zh-CN") {
+                Lang::SetLanguage(Lang::Code::zh_CN);
+                return std::string("Language set to: zh-CN");
+            } else {
+                throw std::runtime_error("Unsupported language: " + lang + ". Supported: zh-CN, en-US");
+            }
+        }
+    );
 
     // Restore the original tools list to the end of the tools list
     tools_.insert(tools_.end(), original_tools.begin(), original_tools.end());

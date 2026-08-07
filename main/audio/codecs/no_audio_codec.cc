@@ -221,15 +221,30 @@ int NoAudioCodec::Write(const int16_t* data, int samples) {
     // output_volume_: 0-100
     // volume_factor_: 0-65536
     int32_t volume_factor = pow(double(output_volume_) / 100.0, 2) * 65536;
+    // 硬件增益补偿 2x
+    constexpr int32_t kHardwareGainBoost = 3;
+
+    // 软削峰参数：75% 以下线性，以上指数压缩
+    const double kMaxOut    = static_cast<double>(INT32_MAX);
+    const double kThreshold = 0.75 * kMaxOut;   // 线性区上限
+    const double kHeadroom  = 0.25 * kMaxOut;   // 压缩区渐近空间
+
     for (int i = 0; i < samples; i++) {
-        int64_t temp = int64_t(data[i]) * volume_factor; // 使用 int64_t 进行乘法运算
-        if (temp > INT32_MAX) {
-            buffer[i] = INT32_MAX;
-        } else if (temp < INT32_MIN) {
-            buffer[i] = INT32_MIN;
+        double boosted = double(data[i]) * kHardwareGainBoost * volume_factor;
+        double abs_val = std::abs(boosted);
+
+        double output;
+        if (abs_val <= kThreshold) {
+            // 线性区：不压缩
+            output = boosted;
         } else {
-            buffer[i] = static_cast<int32_t>(temp);
+            // 软削峰：output = threshold + headroom * (1 - exp(-excess / headroom))
+            double excess = abs_val - kThreshold;
+            double compressed = kThreshold + kHeadroom * (1.0 - exp(-excess / kHeadroom));
+            output = (boosted >= 0) ? compressed : -compressed;
         }
+
+        buffer[i] = static_cast<int32_t>(output);
     }
 
     size_t bytes_written;
@@ -248,8 +263,9 @@ int NoAudioCodec::Read(int16_t* dest, int samples) {
 
     samples = bytes_read / sizeof(int32_t);
     for (int i = 0; i < samples; i++) {
-        int32_t value = bit32_buffer[i] >> 12;
-        dest[i] = (value > INT16_MAX) ? INT16_MAX : (value < -INT16_MAX) ? -INT16_MAX : (int16_t)value;
+        // 取高 16 位，直接对齐 int16_t 范围，避免 >>12 导致的削波
+        int32_t value = bit32_buffer[i] >> 16;
+        dest[i] = (int16_t)value;
     }
     return samples;
 }

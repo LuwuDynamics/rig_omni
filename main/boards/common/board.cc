@@ -49,6 +49,10 @@ bool Board::GetBatteryLevel(int &level, bool& charging, bool& discharging) {
     return false;
 }
 
+std::string_view Board::GetSuccessSound() {
+    return Lang::Sounds::OGG_SUCCESS();
+}
+
 bool Board::GetTemperature(float& esp32temp){
     return false;
 }
@@ -107,7 +111,7 @@ std::string Board::GetSystemInfoJson() {
             }
         }
     */
-    std::string json = R"({"version":2,"language":")" + std::string(Lang::CODE) + R"(",)";
+    std::string json = R"({"version":2,"language":")" + std::string(Lang::CodeStr()) + R"(",)";
     json += R"("flash_size":)" + std::to_string(SystemInfo::GetFlashSize()) + R"(,)";
     json += R"("minimum_free_heap_size":")" + std::to_string(SystemInfo::GetMinimumFreeHeapSize()) + R"(",)";
     json += R"("mac_address":")" + SystemInfo::GetMacAddress() + R"(",)";

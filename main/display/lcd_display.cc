@@ -450,7 +450,7 @@ void LcdDisplay::SetupUI() {
     lv_label_set_long_mode(status_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(status_label_, lvgl_theme->text_color(), 0);
-    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
+    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING());
     lv_obj_align(status_label_, LV_ALIGN_CENTER, 0, 0);
     
     /* Content - Chat area */
@@ -481,7 +481,7 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_bg_color(low_battery_popup_, lvgl_theme->low_battery_color(), 0);
     lv_obj_set_style_radius(low_battery_popup_, lvgl_theme->spacing(4), 0);
     low_battery_label_ = lv_label_create(low_battery_popup_);
-    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
+    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE());
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);
@@ -921,7 +921,7 @@ void LcdDisplay::SetupUI() {
     lv_label_set_long_mode(status_label_, LV_LABEL_LONG_SCROLL_CIRCULAR);
     lv_obj_set_style_text_align(status_label_, LV_TEXT_ALIGN_CENTER, 0);
     lv_obj_set_style_text_color(status_label_, lvgl_theme->text_color(), 0);
-    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING);
+    lv_label_set_text(status_label_, Lang::Strings::INITIALIZING());
     lv_obj_align(status_label_, LV_ALIGN_CENTER, 0, 0);
 
 #if CONFIG_USE_MULTILINE_CHAT_MESSAGE
@@ -988,7 +988,7 @@ void LcdDisplay::SetupUI() {
     lv_obj_set_style_radius(low_battery_popup_, lvgl_theme->spacing(4), 0);
     
     low_battery_label_ = lv_label_create(low_battery_popup_);
-    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE);
+    lv_label_set_text(low_battery_label_, Lang::Strings::BATTERY_NEED_CHARGE());
     lv_obj_set_style_text_color(low_battery_label_, lv_color_white(), 0);
     lv_obj_center(low_battery_label_);
     lv_obj_add_flag(low_battery_popup_, LV_OBJ_FLAG_HIDDEN);

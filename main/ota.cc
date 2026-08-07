@@ -47,7 +47,11 @@ std::string Ota::GetCheckVersionUrl() {
     Settings settings("wifi", false);
     std::string url = settings.GetString("ota_url");
     if (url.empty()) {
-        url = CONFIG_OTA_URL;
+#if CONFIG_FIRMWARE_REGION_OVERSEAS
+        url = "https://xl-api.luwudynamics.ai/xiaolu/ota/";
+#else
+        url = "https://xl-api.xgorobot.com/xiaolu/ota/";
+#endif
     }
     return url;
 }
@@ -65,7 +69,7 @@ std::unique_ptr<Http> Ota::SetupHttp() {
         ESP_LOGI(TAG, "Setup HTTP, User-Agent: %s, Serial-Number: %s", user_agent.c_str(), serial_number_.c_str());
     }
     http->SetHeader("User-Agent", user_agent);
-    http->SetHeader("Accept-Language", Lang::CODE);
+    http->SetHeader("Accept-Language", Lang::CodeStr());
     http->SetHeader("Content-Type", "application/json");
 
     return http;

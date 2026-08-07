@@ -65,8 +65,12 @@ bool Esp32Camera::Capture() {
         return false;
     }
 
-    // Get the latest frame, discard old frames for real-time performance
-    for (int i = 0; i < 2; i++) {
+    // Flush all stale frames to ensure a fresh capture.
+    // With fb_count=2 (double buffering), we need 3 iterations:
+    //   iter 1: drain buffer A (old), return it
+    //   iter 2: drain buffer B (old), return it
+    //   iter 3: both buffers now free, camera MUST capture a new frame -> fresh!
+    for (int i = 0; i < 3; i++) {
         if (current_fb_) {
             esp_camera_fb_return(current_fb_);
         }
@@ -324,5 +328,16 @@ std::string Esp32Camera::Explain(const std::string &question) {
     size_t remain_stack_size = uxTaskGetStackHighWaterMark(nullptr);
     ESP_LOGI(TAG, "Explain image size=%dx%d, compressed size=%d, remain stack size=%d, question=%s\n%s",
              current_fb_->width, current_fb_->height, (int)total_sent, (int)remain_stack_size, question.c_str(), result.c_str());
+
+    // 归还帧缓冲，防止相机缓冲区耗尽
+    ReleaseFrame();
+
     return result;
+}
+
+void Esp32Camera::ReleaseFrame() {
+    if (current_fb_) {
+        esp_camera_fb_return(current_fb_);
+        current_fb_ = nullptr;
+    }
 }

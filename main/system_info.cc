@@ -13,7 +13,7 @@
 #include "esp_wifi_remote.h"
 #endif
 
-#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER)
+#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER) || defined(CONFIG_BOARD_TYPE_ARM)
 #include "imu.h"
 #endif
 
@@ -152,7 +152,7 @@ void SystemInfo::PrintTaskList() {
 void SystemInfo::PrintHeapStats() {
     int free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
     int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER)
+#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER) || defined(CONFIG_BOARD_TYPE_ARM)
     if (imu_is_initialized()) {
         ESP_LOGI(TAG, "free sram: %u minimal sram: %u | IMU: roll=%.1f pitch=%.1f accel=(%.1f,%.1f,%.1f)",
                  free_sram, min_free_sram, roll, pitch, accel_x, accel_y, accel_z);
@@ -169,7 +169,7 @@ void SystemInfo::PrintPmLocks() {
 }
 
 void SystemInfo::PrintImuStatus() {
-#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER)
+#if defined(CONFIG_BOARD_TYPE_PUPPY) || defined(CONFIG_BOARD_TYPE_HOVER) || defined(CONFIG_BOARD_TYPE_ARM)
     if (imu_is_initialized()) {
         ESP_LOGI(TAG, "IMU: initialized, roll=%.2f pitch=%.2f yaw=%.2f accel=(%.2f, %.2f, %.2f)",
                  roll, pitch, yaw, accel_x, accel_y, accel_z);

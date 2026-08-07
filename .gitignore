@@ -17,6 +17,8 @@ sdkconfig.old
 # ===== 自动生成文件 =====
 main/mmap_generate_emoji.h
 mmap_generate_*.h
+# wificonfig.eaf 由构建系统根据 FIRMWARE_REGION 自动生成
+main/boards/*/emoji/wificonfig.eaf
 
 # ===== 环境与缓存 =====
 .env
@@ -39,3 +41,6 @@ __pycache__/
 
 # ===== 已迁移至 tools/ 的开发脚本 =====
 scripts/
+
+# ===== help 文档 =====
+help/

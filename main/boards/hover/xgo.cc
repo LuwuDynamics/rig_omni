@@ -50,7 +50,10 @@ float stable_pos = 0.0;
 long stable_time = 0;
 float stable_yaw = 0.0;
 float yaw_u = 0.0;
-float k_yaw = 3.0; //3.0
+float k_yaw = 4.0; //3.0
+float yaw_ctrl_time = 0.0;
+float servo_voltage = 0.0;  // ID=3 舵机读取的 PRESENT_VOLTAGE (0.1V 精度)
+
 int rx_index = 0;
 
 
@@ -134,7 +137,7 @@ void xgo_rx(){
                     rxFlag = 3;
                     break;
             case 3:
-                if(res == 0x08||res == 0x0B)
+                if(res == 0x08||res == 0x0B||res == 0x03)
                     {					
                         rxFlag = 4; 
                         rxBuffer[3] = res;
@@ -162,6 +165,7 @@ void xgo_rx(){
                     switch(rxBuffer[2])
                     {			
                         case 1:
+                        case 11:
                             POS_LOW_Byte =  rxBuffer[rxDataLen - 3];
                             POS_HIGH_Byte =  rxBuffer[rxDataLen - 2];
                             VEL_LOW_Byte =  rxBuffer[rxDataLen - 1];
@@ -182,6 +186,7 @@ void xgo_rx(){
                             last11Pos = tempPos;
                             break;
                         case 2:
+                        case 21:
                             POS_LOW_Byte =  rxBuffer[rxDataLen - 3];
                             POS_HIGH_Byte =  rxBuffer[rxDataLen - 2];
                             VEL_LOW_Byte =  rxBuffer[rxDataLen - 1];
@@ -203,10 +208,16 @@ void xgo_rx(){
                             break;
                         
                         case 3:
-                            POS_LOW_Byte =  rxBuffer[rxDataLen - 1];
-                            POS_HIGH_Byte =  rxBuffer[rxDataLen];
-                            tempPos = POS_LOW_Byte | (POS_HIGH_Byte << 8);
-                            q_head = (1500.0 - tempPos)/10.0;
+                            if (rxDataLen == 3) {
+                                // PRESENT_VOLTAGE 响应: 1 字节电压值 (0.1V 精度)
+                                servo_voltage = rxBuffer[5] * 0.1f;
+                            } else {
+                                // 舵机位置响应
+                                POS_LOW_Byte =  rxBuffer[rxDataLen - 1];
+                                POS_HIGH_Byte =  rxBuffer[rxDataLen];
+                                tempPos = POS_LOW_Byte | (POS_HIGH_Byte << 8);
+                                q_head = (1500.0 - tempPos)/10.0;
+                            }
                             break;
 
                         default:
@@ -281,6 +292,21 @@ void WriteByte_P_V(uint8_t ID, short pos,short vel){
 }
 
 
+void ReadServoVoltage(uint8_t readID){
+    uint8_t bBuf[8];
+    uint8_t CheckSum = 0;
+    bBuf[0] = 0xff;
+    bBuf[1] = 0xff;
+    bBuf[2] = readID;
+    bBuf[3] = 0x04;
+    bBuf[4] = 0x02;
+    bBuf[5] = 0x40;      // PRESENT_VOLTAGE 寄存器
+    bBuf[6] = 0x01;      // 读取 1 字节
+    CheckSum = readID + 0x04 + 0x02 + 0x40 + 0x01;
+    bBuf[7] = ~CheckSum;
+    SendMotorCommand(bBuf, 8);
+}
+
 void ReadWheelState(uint8_t readID)
 {
 	uint8_t bBuf[8];
@@ -344,21 +370,25 @@ void WritePos_Sync_kp(uint8_t ID[], uint8_t IDN, float Position[], short Torque[
 }
 
 void sendWheelTor(short tor1, short tor2){
-    float position[4];
-    short torque[4];
-    uint8_t tempID[4] = {55, 1, 2, 66};
+    float position[6];
+    short torque[6];
+    uint8_t tempID[6] = {55, 1, 2, 11, 21, 66};
     
     position[0] = 0;
     position[1] = 0;
     position[2] = 0;
     position[3] = 0;
+    position[4] = 0;
+    position[5] = 0;
 
     torque[0] = 0;
     torque[1] = tor1;
     torque[2] = tor2;
-    torque[3] = 0;
+    torque[3] = tor1;   // ID 11: 同左轮
+    torque[4] = tor2;   // ID 21: 同右轮
+    torque[5] = 0;
 
-    WritePos_Sync_kp(tempID, 4, position, torque);
+    WritePos_Sync_kp(tempID, 6, position, torque);
 }
 
 
@@ -396,12 +426,15 @@ void update_state(){
 
     if(stable_flag == 0){
         stable_pos = wheel_x;
-        stable_yaw = yaw - q_head;
+        
     }
     if((fabsf(stable_pos - wheel_x) > 0.5f || fabsf(pitch) > 30.0f) && stable_flag){
         stable_flag = 0;
     }
 
+    if(esp_timer_get_time()/1000.0-yaw_ctrl_time>3000){
+        stable_yaw = yaw - q_head;
+    }
 
     // 姿态超出安全范围持续 → 摔倒；持续直立 → 恢复（累计时间，避免每周期刷新计时）
     static const int64_t kFallHoldUs = 500LL * 1000;
@@ -530,12 +563,22 @@ void xgo_control() {
         ReadWheelState(1);
     }else if(rx_index == 1){
         ReadWheelState(2);
+    }else if(rx_index == 2){
+        ReadWheelState(11);
+    }else if(rx_index == 3){
+        ReadWheelState(21);
     }else{
         ReadMotorState(3);
     }
     vTaskDelay(pdMS_TO_TICKS(2));
-    if(rx_index++>2){
+    if(rx_index++>4){
         rx_index = 0;
+    }
+
+    // 每分钟读一次电池电压（约 7500 个周期）
+    static int voltage_counter_hover = 0;
+    if (++voltage_counter_hover % 7500 == 0) {
+        ReadServoVoltage(3);
     }
 
 }

@@ -15,8 +15,8 @@
 #include "wifi_board.h"
 #include "board.h"
 
-#define BLUFI_DEVICE_NAME_PREFIX "RIG-Puppy"
-static char blufi_device_name[20] = "RIG-Puppy0000";
+#define BLUFI_DEVICE_NAME_PREFIX BOARD_TYPE
+static char blufi_device_name[24] = BOARD_TYPE "0000";
 
 #ifdef CONFIG_BT_BLUEDROID_ENABLED
 #include "esp_bt_device.h"

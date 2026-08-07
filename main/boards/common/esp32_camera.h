@@ -37,6 +37,7 @@ public:
 
     virtual void SetExplainUrl(const std::string &url, const std::string &token) override;
     virtual bool Capture() override;
+    virtual void ReleaseFrame() override;
     virtual bool SetHMirror(bool enabled) override;
     virtual bool SetVFlip(bool enabled) override;
     virtual bool SetSwapBytes(bool enabled) override;

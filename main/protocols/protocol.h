@@ -83,7 +83,7 @@ protected:
     std::function<void()> on_connected_;
     std::function<void()> on_disconnected_;
 
-    int server_sample_rate_ = 24000;
+    int server_sample_rate_ = 16000;
     int server_frame_duration_ = 60;
     bool error_occurred_ = false;
     std::string session_id_;

@@ -46,7 +46,12 @@ def copy_directory(src, dst):
 
 
 def process_wakenet_model(wakenet_model_dir, build_dir, assets_dir):
-    """Process wakenet_model parameter"""
+    """Process wakenet_model parameter
+    
+    Supports two input formats:
+    - Single model directory (e.g. .../wn9_xiaolutongxue) — copied as one model
+    - Staging directory with multiple model subdirectories — all models copied
+    """
     if not wakenet_model_dir:
         return None
     
@@ -54,7 +59,26 @@ def process_wakenet_model(wakenet_model_dir, build_dir, assets_dir):
     wakenet_build_dir = os.path.join(build_dir, "wakenet_model")
     if os.path.exists(wakenet_build_dir):
         shutil.rmtree(wakenet_build_dir)
-    copy_directory(wakenet_model_dir, os.path.join(wakenet_build_dir, os.path.basename(wakenet_model_dir)))
+    
+    # Detect if input is a directory of models (contains subdirs) or a single model
+    has_subdirs = any(
+        os.path.isdir(os.path.join(wakenet_model_dir, d))
+        for d in os.listdir(wakenet_model_dir)
+    )
+    
+    if has_subdirs:
+        # Staging directory with multiple model subdirectories — copy contents directly
+        copy_directory(wakenet_model_dir, wakenet_build_dir)
+        print(f"Staging directory detected, copied all models from: {wakenet_model_dir}")
+    else:
+        # Single model directory — copy as subdirectory (backward compatible)
+        copy_directory(wakenet_model_dir, os.path.join(wakenet_build_dir, os.path.basename(wakenet_model_dir)))
+    
+    # List models being packed
+    for item in os.listdir(wakenet_build_dir):
+        item_path = os.path.join(wakenet_build_dir, item)
+        if os.path.isdir(item_path):
+            print(f"  Model: {item}")
     
     # Use pack_model.py to generate srmodels.bin
     srmodels_output = os.path.join(wakenet_build_dir, "srmodels.bin")

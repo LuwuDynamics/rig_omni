@@ -64,7 +64,7 @@ bool WebsocketProtocol::SendText(const std::string& text) {
 
     if (!websocket_->Send(text)) {
         ESP_LOGE(TAG, "Failed to send text: %s", text.c_str());
-        SetError(Lang::Strings::SERVER_ERROR);
+        SetError(Lang::Strings::SERVER_ERROR());
         return false;
     }
 
@@ -175,7 +175,7 @@ bool WebsocketProtocol::OpenAudioChannel() {
     ESP_LOGI(TAG, "Connecting to websocket server: %s with version: %d", url.c_str(), version_);
     if (!websocket_->Connect(url.c_str())) {
         ESP_LOGE(TAG, "Failed to connect to websocket server, code=%d", websocket_->GetLastError());
-        SetError(Lang::Strings::SERVER_NOT_CONNECTED);
+        SetError(Lang::Strings::SERVER_NOT_CONNECTED());
         return false;
     }
 
@@ -189,7 +189,7 @@ bool WebsocketProtocol::OpenAudioChannel() {
     EventBits_t bits = xEventGroupWaitBits(event_group_handle_, WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT, pdTRUE, pdFALSE, pdMS_TO_TICKS(10000));
     if (!(bits & WEBSOCKET_PROTOCOL_SERVER_HELLO_EVENT)) {
         ESP_LOGE(TAG, "Failed to receive server hello");
-        SetError(Lang::Strings::SERVER_TIMEOUT);
+        SetError(Lang::Strings::SERVER_TIMEOUT());
         return false;
     }
 

@@ -1,10 +1,33 @@
 menu "RIG-Omni"
 
-config OTA_URL
-    string "Default OTA URL"
-    default "https://xl-api.xgorobot.com/xiaolu/ota/"
+choice FIRMWARE_REGION
+    prompt "Firmware Region"
+    default FIRMWARE_REGION_DOMESTIC
     help
-        The application will access this URL to check for new firmwares and server address.
+        Select domestic (China) or overseas firmware version.
+        This affects OTA URL, default language, wake word, and WiFi config animation.
+
+    config FIRMWARE_REGION_DOMESTIC
+        bool "Domestic (China)"
+        help
+            Chinese market: default zh_CN language, xgorobot.com OTA.
+
+    config FIRMWARE_REGION_OVERSEAS
+        bool "Overseas"
+        select SR_WN_WN9_HEYKIRA_TTS3
+        help
+            International market: default en_US language, luwudynamics.ai OTA.
+            Auto-enables Hey Kira wake word (coexists with custom wake word).
+endchoice
+
+config OTA_URL
+    string "OTA URL override (empty = auto by region)"
+    default ""
+    help
+        Leave empty to auto-select by FIRMWARE_REGION:
+          Domestic  -> https://xl-api.xgorobot.com/xiaolu/ota/
+          Overseas  -> https://xl-api.luwudynamics.ai/xiaolu/ota/
+        Set a non-empty value to override the auto-selected URL.
 
 choice
     prompt "Flash Assets"
@@ -33,18 +56,6 @@ config CUSTOM_ASSETS_FILE
         The custom assets file to flash.
         It can be a local file relative to the project directory or a remote url.
 
-choice
-    prompt "Default Language"
-    default LANGUAGE_ZH_CN
-    help
-        Select device display language
-
-    config LANGUAGE_ZH_CN
-        bool "Chinese (简体中文)"
-    config LANGUAGE_EN_US
-        bool "English"
-endchoice
-
 choice BOARD_TYPE
     prompt "Board Type"
     default BOARD_TYPE_PUPPY
@@ -56,12 +67,18 @@ choice BOARD_TYPE
     config BOARD_TYPE_HOVER
         bool "RIG-Hover"
         depends on IDF_TARGET_ESP32S3
+    config BOARD_TYPE_ARM
+        bool "RIG-Arm"
+        depends on IDF_TARGET_ESP32S3
+    config BOARD_TYPE_BOT
+        bool "RIG-Bot"
+        depends on IDF_TARGET_ESP32S3
 endchoice
 
 config PUPPY_ENABLE_BLE_CONTROL
-    bool "Enable BLE Control for Puppy/Hover Robot (XGO APP compatible)"
+    bool "Enable BLE Control for Puppy/Hover/Arm Robot (XGO APP compatible)"
     default n
-    depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER
+    depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_BOT
     select BT_ENABLED
     select BT_NIMBLE_ENABLED
     help
@@ -83,7 +100,7 @@ choice DISPLAY_STYLE
 
     config USE_EMOTE_MESSAGE_STYLE
         bool "Emote animation style"
-        depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER
+        depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_BOT
 endchoice
 
 config USE_MULTILINE_CHAT_MESSAGE

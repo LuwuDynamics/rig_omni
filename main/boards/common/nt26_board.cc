@@ -2,6 +2,7 @@
 #include "display.h"
 #include "application.h"
 #include "audio_codec.h"
+#include "assets/lang_config.h"
 #include <esp_log.h>
 #include <font_awesome.h>
 #include <cJSON.h>
@@ -260,6 +261,9 @@ std::string Nt26Board::GetDeviceStatusJson() {
         }
     }
     cJSON_AddItemToObject(root, "network", network);
+
+    // Language
+    cJSON_AddStringToObject(root, "language", Lang::CodeStr());
 
     auto json_str = cJSON_PrintUnformatted(root);
     std::string json(json_str);

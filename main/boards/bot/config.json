@@ -1,0 +1,7 @@
+{
+  "target": "esp32s3",
+  "display": true,
+  "camera": true,
+  "psram": true,
+  "description": "RIG-Bot 开发板"
+}

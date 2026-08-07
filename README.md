@@ -58,7 +58,7 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 | 4 | Brushless Serial Motors (Hover: 2 wheels) | UART (XGO Protocol) | Differential drive |
 | 5 | I2S Audio (Direct) | I2S | Simplex/Duplex mic + speaker (no hardware codec chip) |
 | 6 | Camera (GC0308/OV2640) | DVP | Snapshot via MCP tools |
-| 7 | Boot + Touch Button | GPIO | WiFi config, chat toggle, NVS reset (Touch on Hover only) |
+| 7 | Boot + Touch Button | GPIO | WiFi config, chat toggle, NVS reset (Touch on Hover & ARM) |
 
 > All boards share the same ESP32-S3 core with GC9A01 display. Per-form motor configurations are isolated in their respective board directories.
 
@@ -66,35 +66,12 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 
 ## 🏗️ Architecture
 
-```
-┌─────────────────────────────────────────────────────┐
-│                  Application Layer                  │
-│  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐  │
-│  │  Voice   │ │  Emote   │ │  MCP   │ │  Camera  │  │
-│  │   AI     │ │ Display  │ │ Server │ │  Tools   │  │
-│  └──────────┘ └──────────┘ └────────┘ └──────────┘  │
-├─────────────────────────────────────────────────────┤
-│                 Board Abstraction                   │
-│  ┌──────────────────────────────────────────────┐   │
-│  │              boards/common/                  │   │
-│  │  IMU · Button · BLE · Battery · Camera · ... │   │
-│  └──────────────────────────────────────────────┘   │
-│  ┌───────────────┐  ┌───────────────────────────┐   │
-│  │ boards/puppy/ │  │      boards/hover/        │   │
-│  │  5-Servo Dog  │  │  1-Servo + 2-Wheel Hover  │   │
-│  └───────────────┘  └───────────────────────────┘   │
-├─────────────────────────────────────────────────────┤
-│                ESP-IDF Framework                    │
-│  WiFi · Bluetooth · SPI · I2C · I2S · UART · GPIO   │
-└─────────────────────────────────────────────────────┘
-```
-
-| Layer | Technology | Role |
+| Layer | Components | Technology |
 | --- | --- | --- |
-| Application | C++ (ESP-IDF) | Core services: voice, display, MCP, OTA |
-| Board Abstraction | C++ shared drivers | Common hardware: IMU, BLE, buttons, battery |
-| Robot Logic | Per-board C++ | Motor control, actions, debug tools |
-| Platform | ESP-IDF v5.5+ | WiFi/BLE, peripherals, FreeRTOS |
+| **Application** | Voice AI · Emote Display · MCP Server · Camera Tools | C++ (ESP-IDF) |
+| **Board Abstraction** | `boards/common/` — IMU · Button · BLE · Battery · Camera | C++ shared drivers |
+| **Robot Logic** | `boards/puppy/` (5-Servo Dog) · `boards/hover/` (1-Servo + 2-Wheel Hover) · `boards/arm/` (Multi-Servo Arm) | Per-board C++ |
+| **Platform** | WiFi · Bluetooth · SPI · I2C · I2S · UART · GPIO | ESP-IDF v5.5+ |
 
 ---
 
@@ -116,10 +93,11 @@ cd RIG-Omni
 # Source ESP-IDF environment
 source ~/esp/esp-idf/export.sh
 
-# Select board type (interactive menu)
+# Select board type and firmware region (interactive menu)
 idf.py set-target esp32s3
 idf.py menuconfig
-# → RIG-Omni → Board Type → Puppy / Hover
+# → RIG-Omni → Board Type → Puppy / Hover / ARM
+# → RIG-Omni → Firmware Region → Domestic (China) / Overseas
 
 # Build & Flash
 idf.py build
@@ -148,7 +126,8 @@ RIG-Omni/
 │   ├── boards/              # Hardware abstraction layer
 │   │   ├── common/          # Shared drivers (IMU, button, BLE, camera…)
 │   │   ├── puppy/           # Puppy robot (5-servo dog)
-│   │   └── hover/           # Hover robot (2-wheel hovercraft)
+│   │   ├── hover/           # Hover robot (2-wheel hovercraft)
+│   │   └── arm/             # ARM robot (multi-servo robotic arm)
 │   ├── assets/              # Language packs, fonts
 │   ├── application.cc/h     # Application lifecycle
 │   ├── mcp_server.cc/h      # MCP remote control server
@@ -180,6 +159,7 @@ idf.py menuconfig
 | --- | --- | --- | --- |
 | **RIG-Puppy** | 5 servos | Dog gait, head tracking, actions | `boards/puppy/puppy_board.cc` |
 | **RIG-Hover** | 1 servo + 2 FOC motors | Balance, wheel drive, differential | `boards/hover/hover_board.cc` |
+| **RIG-ARM** | Multi-servo (AX-12A) | Robotic arm, calibration, teach mode | `boards/arm/arm_board.cc` |
 
 Each board has its own:
 - Motor control logic (`xgo.cc/h`, `xgo_action.cc/h`)
@@ -188,6 +168,36 @@ Each board has its own:
 - Debug tools (`hover_debug_server.cc/h` for Hover)
 
 All hardware drivers (IMU, Bluetooth, buttons, camera, battery) live in `boards/common/` and are shared across all forms.
+
+### Firmware Region (Domestic / Overseas)
+
+RIG-Omni supports building both domestic (China) and overseas firmware from a single codebase. Select the region in menuconfig:
+
+```bash
+idf.py menuconfig
+# → RIG-Omni → Firmware Region → Domestic (China) / Overseas
+```
+
+| Configuration | Domestic (China) | Overseas |
+| --- | --- | --- |
+| OTA URL | `xl-api.xgorobot.com` | `xl-api.luwudynamics.ai` |
+| Default Language | zh_CN | en_US |
+| Wake Word | Custom (e.g. 小陆同学) | Custom + Hey Kira |
+| WiFi Config Animation | Domestic QR code | Overseas QR code |
+
+The region selection automatically configures:
+- **OTA URL** — different server endpoints for firmware updates and server address discovery
+- **Default Language** — `zh_CN` for domestic, `en_US` for overseas (users can still switch via MCP)
+- **Wake Word** — overseas auto-enables ESP-SR built-in "Hey Kira" alongside the custom wake word
+- **WiFi Config EAF** — different `wificonfig.eaf` animation (with region-specific QR code) is selected at build time
+
+The `wificonfig.eaf` file is auto-generated during build. Each board keeps two source files:
+```
+main/boards/<board>/emoji/
+    wificonfig_domestic.eaf    # Domestic QR code
+    wificonfig_overseas.eaf    # Overseas QR code
+    wificonfig.eaf             # Auto-generated (gitignored)
+```
 
 ---
 

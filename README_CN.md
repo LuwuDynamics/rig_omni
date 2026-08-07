@@ -58,7 +58,7 @@ RIG-Omni 是一个基于 ESP32-S3 的开源嵌入式固件，能在同一代码�
 | 4 | 无刷串行电机（Hover: 2 轮） | UART（XGO 协议） | 差速驱动 |
 | 5 | I2S 音频（直连） | I2S | 单工/双工 麦克风 + 扬声器（无硬件编解码芯片） |
 | 6 | 摄像头（GC0308/OV2640） | DVP | MCP 工具快照 |
-| 7 | Boot + 触摸按键 | GPIO | 配网、对话切换、NVS 重置（触摸仅 Hover 有） |
+| 7 | Boot + 触摸按键 | GPIO | 配网、对话切换、NVS 重置（触摸 Hover 和 ARM 有） |
 
 > 所有板型共用 ESP32-S3 核心 + GC9A01 显示。各形态的电机配置独立存放在对应板型目录。
 
@@ -66,35 +66,12 @@ RIG-Omni 是一个基于 ESP32-S3 的开源嵌入式固件，能在同一代码�
 
 ## 🏗️ 架构
 
-```
-┌─────────────────────────────────────────────────────┐
-│                    应用层                             │
-│  ┌──────────┐ ┌──────────┐ ┌────────┐ ┌──────────┐ │
-│  │  语音 AI │ │ 表情显示 │ │  MCP   │ │  摄像头  │ │
-│  │          │ │          │ │ 服务   │ │   工具   │ │
-│  └──────────┘ └──────────┘ └────────┘ └──────────┘ │
-├─────────────────────────────────────────────────────┤
-│                   板型抽象层                          │
-│  ┌──────────────────────────────────────────────┐   │
-│  │              boards/common/                   │   │
-│  │  IMU · 按键 · BLE · 电池 · 摄像头 · ...      │   │
-│  └──────────────────────────────────────────────┘   │
-│  ┌───────────────┐  ┌───────────────────────────┐   │
-│  │ boards/puppy/ │  │      boards/hover/        │   │
-│  │   5舵机机器狗 │  │  1舵机 + 2轮 气垫船      │   │
-│  └───────────────┘  └───────────────────────────┘   │
-├─────────────────────────────────────────────────────┤
-│                 ESP-IDF 框架                         │
-│  WiFi · 蓝牙 · SPI · I2C · I2S · UART · GPIO       │
-└─────────────────────────────────────────────────────┘
-```
-
-| 层级 | 技术 | 职责 |
+| 层级 | 组件 | 技术 |
 | --- | --- | --- |
-| 应用层 | C++（ESP-IDF） | 核心服务：语音、显示、MCP、OTA |
-| 板型抽象 | C++ 共享驱动 | 通用硬件：IMU、BLE、按键、电池 |
-| 机器人逻辑 | 各板型 C++ | 电机控制、动作、调试工具 |
-| 平台层 | ESP-IDF v5.5+ | WiFi/BLE、外设、FreeRTOS |
+| **应用层** | 语音 AI · 表情显示 · MCP 服务 · 摄像头工具 | C++（ESP-IDF） |
+| **板型抽象** | `boards/common/` — IMU · 按键 · BLE · 电池 · 摄像头 | C++ 共享驱动 |
+| **机器人逻辑** | `boards/puppy/`（5舵机机器狗）· `boards/hover/`（1舵机+2轮气垫船）· `boards/arm/`（多舵机机械臂） | 各板型 C++ |
+| **平台层** | WiFi · 蓝牙 · SPI · I2C · I2S · UART · GPIO | ESP-IDF v5.5+ |
 
 ---
 
@@ -116,10 +93,11 @@ cd RIG-Omni
 # 激活 ESP-IDF 环境
 source ~/esp/esp-idf/export.sh
 
-# 选择板型（交互菜单）
+# 选择板型和固件区域（交互菜单）
 idf.py set-target esp32s3
 idf.py menuconfig
-# → RIG-Omni Configuration → Board Type → Puppy / Hover
+# → RIG-Omni → Board Type → Puppy / Hover / ARM
+# → RIG-Omni → Firmware Region → Domestic (China) / Overseas
 
 # 编译 & 烧录
 idf.py build
@@ -148,7 +126,8 @@ RIG-Omni/
 │   ├── boards/              # 硬件抽象层
 │   │   ├── common/          # 共享驱动（IMU、按键、BLE、摄像头…）
 │   │   ├── puppy/           # Puppy 机器人（5 舵机机器狗）
-│   │   └── hover/           # Hover 机器人（双轮气垫船）
+│   │   ├── hover/           # Hover 机器人（双轮气垫船）
+│   │   └── arm/             # ARM 机器人（多舵机机械臂）
 │   ├── assets/              # 语言包、字体
 │   ├── application.cc/h     # 应用生命周期
 │   ├── mcp_server.cc/h      # MCP 远程控制服务
@@ -180,6 +159,7 @@ idf.py menuconfig
 | --- | --- | --- | --- |
 | **RIG-Puppy** | 5 舵机 | 狗步态、头部跟随、预设动作 | `boards/puppy/puppy_board.cc` |
 | **RIG-Hover** | 1 舵机 + 2 DC 电机 | 平衡控制、差速驱动 | `boards/hover/hover_board.cc` |
+| **RIG-ARM** | 多舵机（AX-12A） | 机械臂运动、标定、示教模式 | `boards/arm/arm_board.cc` |
 
 每个板型拥有独立的：
 - 电机控制逻辑（`xgo.cc/h`、`xgo_action.cc/h`）
@@ -188,6 +168,36 @@ idf.py menuconfig
 - 调试工具（Hover 的 `hover_debug_server.cc/h`）
 
 所有硬件驱动（IMU、蓝牙、按键、摄像头、电池）统一放在 `boards/common/`，全板型共享。
+
+### 固件区域（国内 / 海外）
+
+RIG-Omni 支持从同一代码库构建国内和海外两个版本的固件。在 menuconfig 中选择区域：
+
+```bash
+idf.py menuconfig
+# → RIG-Omni → Firmware Region → Domestic (China) / Overseas
+```
+
+| 配置项 | 国内 (Domestic) | 海外 (Overseas) |
+| --- | --- | --- |
+| OTA 地址 | `xl-api.xgorobot.com` | `xl-api.luwudynamics.ai` |
+| 默认语言 | zh_CN | en_US |
+| 唤醒词 | 自定义（如小陆同学） | 自定义 + Hey Kira |
+| 配网表情 | 国内版二维码 | 海外版二维码 |
+
+区域选择自动联动以下配置：
+- **OTA 地址** — 不同的固件升级和服务器地址发现端点
+- **默认语言** — 国内默认 zh_CN，海外默认 en_US（用户仍可通过 MCP 切换）
+- **唤醒词** — 海外版自动启用 ESP-SR 内置的 "Hey Kira"，与自定义唤醒词并存
+- **配网 EAF 动画** — 构建时自动选择对应区域的 `wificonfig.eaf`（含区域专属二维码）
+
+`wificonfig.eaf` 在构建时自动生成。每个板型保留两个源文件：
+```
+main/boards/<board>/emoji/
+    wificonfig_domestic.eaf    # 国内版二维码
+    wificonfig_overseas.eaf    # 海外版二维码
+    wificonfig.eaf             # 自动生成（已 gitignore）
+```
 
 ---
 

@@ -8,6 +8,7 @@
 #include <freertos/task.h>
 
 #include "application.h"
+#include "assets/lang_config.h"
 
 #define TAG "main"
 
@@ -21,6 +22,9 @@ extern "C" void app_main(void)
         ret = nvs_flash_init();
     }
     ESP_ERROR_CHECK(ret);
+
+    // Initialize language from NVS (before Application starts)
+    Lang::Initialize();
 
     // Initialize and run the application
     auto& app = Application::GetInstance();

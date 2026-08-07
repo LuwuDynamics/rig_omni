@@ -68,8 +68,10 @@ extern float angle5;
 extern int control_mode;
 extern uint8_t isIMUInit;
 extern float q_head;
+extern float servo_voltage;
 
 // BLE/XGO 风格串口协议入口（从BLE FFF2 收到的数据直接丢给这里）
 void lulu_ble_on_rx_bytes(const uint8_t* data, size_t len);
+void ReadServoVoltage(uint8_t ID);
 
 #endif

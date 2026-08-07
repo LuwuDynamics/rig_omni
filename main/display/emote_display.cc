@@ -226,6 +226,13 @@ void EmoteDisplay::SetPreviewRgb565(const void* data, int width, int height, int
         return;
     }
 
+    // 先隐藏旧预览，再更新数据后显示，强制 GFX 引擎重新渲染以避免显示旧图像
+    emote_lock(emote_handle_);
+    if (preview_obj_) {
+        gfx_obj_set_visible(preview_obj_, false);
+    }
+    emote_unlock(emote_handle_);
+
     // 创建预览图像对象（如果不存在）
     if (!preview_obj_) {
         preview_obj_ = emote_create_obj_by_type(emote_handle_, EMOTE_OBJ_TYPE_IMAGE, "camera_preview");
@@ -233,7 +240,7 @@ void EmoteDisplay::SetPreviewRgb565(const void* data, int width, int height, int
             ESP_LOGE(TAG, "Failed to create preview image object");
             return;
         }
-        
+
         // 创建预览隐藏定时器
         esp_timer_create_args_t timer_args = {
             .callback = [](void* arg) {

@@ -10,6 +10,7 @@
 #include <freertos/task.h>
 #include <esp_network.h>
 #include <esp_log.h>
+#include <esp_app_desc.h>
 #include <utility>
 
 #include <font_awesome.h>
@@ -56,7 +57,7 @@ void WifiBoard::StartNetwork() {
     // Initialize WiFi manager
     WifiManagerConfig config;
     config.ssid_prefix = "RIG-Omni";
-    config.language = Lang::CODE;
+    config.language = Lang::CodeStr();
     wifi_manager.Initialize(config);
 
     // Set unified event callback - forward to NetworkEvent with SSID data
@@ -120,11 +121,11 @@ void WifiBoard::OnNetworkEvent(NetworkEvent event, const std::string& data) {
                 // 显示扫描网络的表情和状态提示
                 auto display = Board::GetInstance().GetDisplay();
                 if (display) {
-                    display->SetStatus(Lang::Strings::SCANNING_WIFI);
+                    display->SetStatus(Lang::Strings::SCANNING_WIFI());
                     display->SetEmotion("scanning");
                 }
                 // TODO: 准备好语音文件后取消注释
-                // Application::GetInstance().PlaySound(Lang::Sounds::OGG_SCANNING_WIFI);
+                // Application::GetInstance().PlaySound(Lang::Sounds::OGG_SCANNING_WIFI());
             }
             break;
         case NetworkEvent::Connecting:
@@ -178,12 +179,12 @@ void WifiBoard::StartWifiConfigMode() {
 
     // Show config prompt after a short delay
     Application::GetInstance().Schedule([&wifi_manager]() {
-        std::string hint = Lang::Strings::CONNECT_TO_HOTSPOT;
+        std::string hint = Lang::Strings::CONNECT_TO_HOTSPOT();
         hint += wifi_manager.GetApSsid();
-        hint += Lang::Strings::ACCESS_VIA_BROWSER;
+        hint += Lang::Strings::ACCESS_VIA_BROWSER();
         hint += wifi_manager.GetApWebUrl();
 
-        Application::GetInstance().Alert(Lang::Strings::WIFI_CONFIG_MODE, hint.c_str(), "wificonfig", Lang::Sounds::OGG_WIFICONFIG);
+        Application::GetInstance().Alert(Lang::Strings::WIFI_CONFIG_MODE(), hint.c_str(), "wificonfig", Lang::Sounds::OGG_WIFICONFIG());
     });
 #elif CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING
     auto &blufi = Blufi::GetInstance();
@@ -195,7 +196,7 @@ void WifiBoard::StartWifiConfigMode() {
         if (display) {
             display->SetEmotion("wificonfig");
         }
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFICONFIG);
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFICONFIG());
         // 调用板级配网开始回调（如让机器狗坐下）
         Board::GetInstance().OnWifiConfigStart();
     });
@@ -219,7 +220,7 @@ void WifiBoard::StartWifiConfigMode() {
 
 void WifiBoard::EnterWifiConfigMode() {
     ESP_LOGI(TAG, "EnterWifiConfigMode called");
-    GetDisplay()->ShowNotification(Lang::Strings::ENTERING_WIFI_CONFIG_MODE);
+    GetDisplay()->ShowNotification(Lang::Strings::ENTERING_WIFI_CONFIG_MODE());
 
     auto& app = Application::GetInstance();
     auto state = app.GetDeviceState();
@@ -366,6 +367,29 @@ std::string WifiBoard::GetDeviceStatusJson() {
     const char* signal = rssi >= -60 ? "strong" : (rssi >= -70 ? "medium" : "weak");
     cJSON_AddStringToObject(network, "signal", signal);
     cJSON_AddItemToObject(root, "network", network);
+
+    // Firmware version
+    auto app_desc = esp_app_get_description();
+    cJSON_AddStringToObject(root, "firmware_version", app_desc->version);
+
+    // Language
+    cJSON_AddStringToObject(root, "language", Lang::CodeStr());
+
+    // Board hardware description
+    auto desc = board.GetBoardDescription();
+    if (!desc.empty()) {
+        cJSON_AddStringToObject(root, "board_type", desc.c_str());
+    }
+
+    // Interrupt mode (AEC)
+    auto& app = Application::GetInstance();
+    const char* aec_label = nullptr;
+    switch (app.GetAecMode()) {
+        case kAecOff:         aec_label = "off";     break;
+        case kAecOnDeviceSide: aec_label = "device";  break;
+        case kAecOnServerSide: aec_label = "server";  break;
+    }
+    cJSON_AddStringToObject(root, "interrupt_mode", aec_label);
 
     // Chip temperature
     float temp = 0.0f;

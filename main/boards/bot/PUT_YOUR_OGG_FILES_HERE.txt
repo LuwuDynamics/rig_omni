@@ -1,0 +1,6 @@
+将板子专属音效 .ogg 文件放在此目录即可
+编译时自动发现并嵌入固件，无需手动配置
+
+例如:
+  - your_startup_sound.ogg
+  - your_notification.ogg

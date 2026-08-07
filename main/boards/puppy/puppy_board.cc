@@ -157,7 +157,7 @@ private:
             .jpeg_quality = 12,
             .fb_count = 2,
             .fb_location = CAMERA_FB_IN_PSRAM,
-            .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+            .grab_mode = CAMERA_GRAB_LATEST,  // 始终获取最新帧
             .sccb_i2c_port = 1,  // 摄像头用GPIO 4/5，IMU用GPIO 48/14，必须用不同端口
         };
 
@@ -242,7 +242,7 @@ private:
                     ESP_LOGW(TAG, "Long press detected (>3s), resetting NVS...");
                     // 播放提示音（如果可用）
                     auto& app = Application::GetInstance();
-                    app.PlaySound(Lang::Sounds::OGG_SUCCESS);
+                    app.PlaySound(Lang::Sounds::OGG_SUCCESS());
                     vTaskDelay(pdMS_TO_TICKS(500));
                     
                     // 清除 NVS
@@ -288,10 +288,10 @@ private:
             auto& app = Application::GetInstance();
             if (app.GetAecMode() == kAecOff) {
                 app.SetAecMode(kAecOnServerSide);
-                app.PlaySound(Lang::Sounds::OGG_OPEN_AEC);
+                app.PlaySound(Lang::Sounds::OGG_OPEN_AEC());
             } else {
                 app.SetAecMode(kAecOff);
-                app.PlaySound(Lang::Sounds::OGG_CLOSE_AEC);
+                app.PlaySound(Lang::Sounds::OGG_CLOSE_AEC());
             }
         });
     }
@@ -582,7 +582,7 @@ private:
                         if (display_) {
                             display_->SetEmotion("remote_mode");
                         }
-                        Application::GetInstance().PlaySound(Lang::Sounds::OGG_ENTER_REMOTE);
+                        Application::GetInstance().PlaySound(Lang::Sounds::OGG_ENTER_REMOTE());
                         
                         bool success = ble_remote_init();
                         if (success) {
@@ -602,7 +602,7 @@ private:
                         if (display_) {
                             display_->SetEmotion("neutral");
                         }
-                        Application::GetInstance().PlaySound(Lang::Sounds::OGG_EXIT_REMOTE);
+                        Application::GetInstance().PlaySound(Lang::Sounds::OGG_EXIT_REMOTE());
                     }
                     return std::string("蓝牙遥控模式已关闭");
                 }
@@ -624,6 +624,9 @@ public:
         
         // 初始化舵机零点（不阻塞，标定检查在 CheckCalibration 中进行）
         InitZeroPos();
+
+        // 立即读取一次电池电压，避免等待 60 秒才有电量数据
+        ReadServoVoltage(1);
         
         // 注册舵机堵转检测回调
         SetMotorStallCallback([](uint8_t motor_id) {
@@ -637,7 +640,7 @@ public:
             }
             
             // 2. 播放"好疼啊"语音（暂用 exclamation，后续添加 pain.ogg）
-            app.PlaySound(Lang::Sounds::OGG_PAIN);
+            app.PlaySound(Lang::Sounds::OGG_PAIN());
             
             // 3. 卸力堵转的舵机（延迟执行，让语音有机会播放）
             app.Schedule([motor_id]() {
@@ -741,7 +744,7 @@ public:
         // 开机站立后执行伸懒腰动作 + silly 表情 + 汪汪叫
         Action_ID = Stretch_ID;
         display_->SetEmotion("launch");
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WOOF);
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WOOF());
         ESP_LOGI(TAG, "Boot animation: stretch + silly + woof");
     }
 
@@ -768,7 +771,7 @@ public:
     virtual void OnWifiConfigEnd() override {
         // 配网结束，从坐姿起身并播放成功语音
         Action_ID = Sit_Reset_ID;
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFI_SUCCESS);
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFI_SUCCESS());
         ESP_LOGI(TAG, "WiFi config end, sit reset (stand up) and play success audio");
     }
 
@@ -787,7 +790,7 @@ public:
         }
         
         // 播放进入标定语音
-        audio.PlaySound(Lang::Sounds::OGG_CALIBRATION_ENTER);
+        audio.PlaySound(Lang::Sounds::OGG_CALIBRATION_ENTER());
         
         // 阻塞等待标定完成（用户三击按键退出标定模式）
         ESP_LOGI(TAG, "Waiting for calibration... (triple click to exit)");
@@ -803,7 +806,7 @@ public:
         }
         
         // 播放退出标定语音
-        audio.PlaySound(Lang::Sounds::OGG_CALIBRATION_EXIT);
+        audio.PlaySound(Lang::Sounds::OGG_CALIBRATION_EXIT());
         
         // 恢复正常表情
         if (display) {
@@ -811,6 +814,30 @@ public:
         }
         
         vTaskDelay(pdMS_TO_TICKS(1000));  // 等待语音播放
+    }
+
+    // 从舵机 ID=1 的 PRESENT_VOLTAGE 寄存器读取电池电压
+    virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging) override {
+        float voltage = servo_voltage;
+        if (voltage < 0.1f) return false;  // 尚未读取到有效电压
+        
+        // 2S 锂电池: 6.6V(~0%) ~ 8.4V(100%)
+        if (voltage >= 8.4f)
+            level = 100;
+        else if (voltage <= 6.6f)
+            level = 0;
+        else
+            level = (int)((voltage - 6.6f) / (8.4f - 6.6f) * 100.0f);
+        
+        charging = false;
+        discharging = true;
+        return true;
+    }
+
+    virtual std::string GetBoardDescription() override {
+        return "一个五自由度四足机器狗，搭载圆形 240x240 LCD 屏幕、ESP32-S3 MCU、8MB PSRAM、"
+               "5路总线舵机、IMU 姿态传感器、GC0308 摄像头，支持光剑控制。"
+               "2S 锂电池供电(6.6V-8.4V)";
     }
 };
 

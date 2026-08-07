@@ -238,6 +238,9 @@ std::string RndisBoard::GetDeviceStatusJson() {
         cJSON_AddItemToObject(root, "chip", chip);
     }
 
+    // Language
+    cJSON_AddStringToObject(root, "language", Lang::CodeStr());
+
     auto str = cJSON_PrintUnformatted(root);
     std::string result(str);
     cJSON_free(str);

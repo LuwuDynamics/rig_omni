@@ -31,9 +31,28 @@
 
 #define TAG "HOVER"
 
+// Hover 专属音效
+namespace {
+    // 开机音效 (0~3s)
+    extern const char engine_startup_ogg_start[] asm("_binary_engine_startup_ogg_start");
+    extern const char engine_startup_ogg_end[] asm("_binary_engine_startup_ogg_end");
+    static const std::string_view STARTUP_SOUND {
+        static_cast<const char*>(engine_startup_ogg_start),
+        static_cast<size_t>(engine_startup_ogg_end - engine_startup_ogg_start)
+    };
+    // 油门音效 (8s~结尾)
+    extern const char engine_throttle_ogg_start[] asm("_binary_engine_throttle_ogg_start");
+    extern const char engine_throttle_ogg_end[] asm("_binary_engine_throttle_ogg_end");
+    static const std::string_view THROTTLE_SOUND {
+        static_cast<const char*>(engine_throttle_ogg_start),
+        static_cast<size_t>(engine_throttle_ogg_end - engine_throttle_ogg_start)
+    };
+}
+
 // 长按重置 NVS 的时间阈值（毫秒）
 static constexpr int kLongPressResetMs = 3000;
 static constexpr int kLongPressShowEmotionMs = 1000;  // 长按1秒后显示表情
+static constexpr int kDoubleTapWindowMs = 400;  // 双击检测窗口（毫秒）
 
 class HoverBoard : public WifiBoard {
 private:
@@ -47,6 +66,10 @@ private:
     int64_t button_press_start_time_ = 0;  // 按键按下时间戳
     esp_timer_handle_t long_press_timer_ = nullptr;  // 长按检测定时器
     bool nvs_reset_emotion_shown_ = false;  // 是否已显示 nvs_reset 表情
+
+    // 触摸双击检测
+    int touch_tap_count_ = 0;                    // 触摸点击计数
+    esp_timer_handle_t tap_timer_ = nullptr;    // 双击检测定时器
 
     void InitializeUart() {
         uart_config_t uart_cfg = {
@@ -147,7 +170,7 @@ private:
             .jpeg_quality = 12,
             .fb_count = 2,
             .fb_location = CAMERA_FB_IN_PSRAM,
-            .grab_mode = CAMERA_GRAB_WHEN_EMPTY,
+            .grab_mode = CAMERA_GRAB_LATEST,  // 始终获取最新帧
             .sccb_i2c_port = 1,  // 摄像头用GPIO 4/5，IMU用GPIO 48/14，必须用不同端口
         };
 
@@ -177,6 +200,33 @@ private:
 
 
     void InitializeButtons() {
+        // 创建双击检测定时器
+        esp_timer_create_args_t tap_timer_args = {
+            .callback = [](void* arg) {
+                auto board = static_cast<HoverBoard*>(arg);
+                if (board->touch_tap_count_ == 1) {
+                    // 单触：随机摇头 + 引擎启动声
+                    int angle = (esp_random() % 150) - 75;  // -75 ~ 75 度
+                    target_head_pos = angle;
+                    auto& app = Application::GetInstance();
+                    app.PlaySound(STARTUP_SOUND);
+                    ESP_LOGI(TAG, "Single tap: random head shake to %d deg + startup sound", angle);
+                } else if (board->touch_tap_count_ >= 2) {
+                    // 双击：播放油门音效 + 原地转圈
+                    auto& app = Application::GetInstance();
+                    app.PlaySound(THROTTLE_SOUND);
+                    stable_yaw += 360.0f;
+                    yaw_ctrl_time = esp_timer_get_time() / 1000.0;
+                    ESP_LOGI(TAG, "Double tap: spin 360° + throttle sound");
+                }
+                board->touch_tap_count_ = 0;
+            },
+            .arg = this,
+            .dispatch_method = ESP_TIMER_TASK,
+            .name = "tap_timer",
+        };
+        esp_timer_create(&tap_timer_args, &tap_timer_);
+
         // 创建长按检测定时器
         esp_timer_create_args_t timer_args = {
             .callback = [](void* arg) {
@@ -218,7 +268,7 @@ private:
                     ESP_LOGW(TAG, "Long press detected (>3s), resetting NVS...");
                     // 播放提示音（如果可用）
                     auto& app = Application::GetInstance();
-                    app.PlaySound(Lang::Sounds::OGG_SUCCESS);
+                    app.PlaySound(THROTTLE_SOUND);
                     vTaskDelay(pdMS_TO_TICKS(500));
                     
                     // 清除 NVS
@@ -255,7 +305,7 @@ private:
             app.ToggleChatState();
         });
 
-        // Touch 传感器（GPIO3）复用 boot button 全部功能
+        // Touch 传感器 —— 单触随机摇头，双击转圈 + 音效
         touch_button_.OnPressDown([this]() {
             button_press_start_time_ = esp_timer_get_time() / 1000;
             nvs_reset_emotion_shown_ = false;
@@ -269,9 +319,10 @@ private:
                 int64_t press_duration = (esp_timer_get_time() / 1000) - button_press_start_time_;
                 ESP_LOGI(TAG, "Touch released, press duration: %d ms", press_duration);
                 if (press_duration >= kLongPressResetMs) {
+                    // 长按 >3s：重置 NVS
                     ESP_LOGW(TAG, "Touch long press detected (>3s), resetting NVS...");
                     auto& app = Application::GetInstance();
-                    app.PlaySound(Lang::Sounds::OGG_SUCCESS);
+                    app.PlaySound(THROTTLE_SOUND);
                     vTaskDelay(pdMS_TO_TICKS(500));
                     esp_err_t ret = nvs_flash_erase();
                     if (ret == ESP_OK) {
@@ -284,22 +335,22 @@ private:
                     vTaskDelay(pdMS_TO_TICKS(1000));
                     esp_restart();
                 } else if (nvs_reset_emotion_shown_) {
+                    // 长按 >1s 但 <3s：取消，恢复表情
                     ESP_LOGI(TAG, "Touch long press cancelled, restoring emotion");
                     if (display_) {
                         display_->SetEmotion("neutral");
+                    }
+                } else {
+                    // 短按：检测单/双击
+                    touch_tap_count_++;
+                    if (touch_tap_count_ == 1) {
+                        // 启动双击检测定时器
+                        esp_timer_start_once(tap_timer_, kDoubleTapWindowMs * 1000);
                     }
                 }
                 button_press_start_time_ = 0;
                 nvs_reset_emotion_shown_ = false;
             }
-        });
-
-        touch_button_.OnClick([this]() {
-            auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting && !WifiManager::GetInstance().IsConnected()) {
-                EnterWifiConfigMode();
-            }
-            app.ToggleChatState();
         });
     }
 
@@ -322,7 +373,7 @@ private:
         mcp_server.AddTool("self.robot.head_angle",
             "设置机器头部角度,角度正负45,0为中间,正为左扭头,负为右扭头",
             PropertyList({
-                Property("angle", kPropertyTypeInteger, -45, 45),
+                Property("angle", kPropertyTypeInteger, -75, 75),
             }), [this](const PropertyList& properties) -> ReturnValue {
                 int angle = properties["angle"].value<int>();
                 ESP_LOGI(TAG, "SetHeadAngle called with angle=%d", angle);
@@ -337,7 +388,7 @@ private:
             }), [this](const PropertyList& properties) -> ReturnValue {
                 int distance = properties["distance"].value<int>();
                 ESP_LOGI(TAG, "SetHeadAngle called with move distance=%d", distance);
-                stable_pos = stable_pos + distance;
+                stable_pos = stable_pos + distance/100.0;
                 return true;
             });
 
@@ -349,7 +400,20 @@ private:
                 int angle = properties["angle"].value<int>();
                 ESP_LOGI(TAG, "SetHeadAngle called with rotate angle=%d", angle);
                 stable_yaw = stable_yaw + angle;
+                yaw_ctrl_time = esp_timer_get_time()/1000.0;  // 下达命令才yaw闭环运动，平时yaw不闭环
                 return true;
+            });
+
+        mcp_server.AddTool("self.status.battery",
+            "查询当前电池电量,返回剩余电量百分比",
+            PropertyList(std::vector<Property>{}), [this](const PropertyList& properties) -> ReturnValue {
+                int level = 0;
+                bool charging = false, discharging = false;
+                if (GetBatteryLevel(level, charging, discharging)) {
+                    return std::string("当前电池电量 ") + std::to_string(level) + "%"
+                        + (charging ? ", 正在充电" : "");
+                }
+                return std::string("暂未读取到电池电压");
             });
 
     }
@@ -365,6 +429,9 @@ public:
         
         InitializeUart();
         InitializeController();
+
+        // 立即读取一次电池电压，避免等待 60 秒才有电量数据
+        ReadServoVoltage(3);
 
         InitializeBootButton();
         
@@ -457,13 +524,17 @@ public:
     virtual void OnStartup() override {
 
         display_->SetEmotion("launch");
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WOOF);
-        ESP_LOGI(TAG, "Boot animation: stretch + silly + woof");
+        Application::GetInstance().PlaySound(STARTUP_SOUND);
+        ESP_LOGI(TAG, "Boot animation: launch + engine startup sound");
     }
 
     virtual void OnInitializationComplete() override {
         // gpio_set_level(LASER_GPIO, 0);  // 初始化完成，关闭激光
         ESP_LOGI(TAG, "Initialization complete, laser off");
+
+        // 播放开机音效
+        auto& app = Application::GetInstance();
+        app.PlaySound(STARTUP_SOUND);
         
         // 启动调试Web服务器（WiFi连接后可通过IP访问）
         if (WifiManager::GetInstance().IsConnected()) {
@@ -480,7 +551,7 @@ public:
     virtual void OnWifiConfigEnd() override {
         // 配网结束，从坐姿起身并播放成功语音
 
-        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFI_SUCCESS);
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFI_SUCCESS());
         ESP_LOGI(TAG, "WiFi config end, sit reset (stand up) and play success audio");
         
         // 启动调试Web服务器
@@ -489,6 +560,35 @@ public:
             std::string ip = WifiManager::GetInstance().GetIpAddress();
             ESP_LOGI(TAG, "Debug server started at http://%s", ip.c_str());
         }
+    }
+
+    // 从舵机 ID=3 的 PRESENT_VOLTAGE 寄存器读取电池电压
+    virtual bool GetBatteryLevel(int &level, bool& charging, bool& discharging) override {
+        float voltage = servo_voltage;
+        if (voltage < 0.1f) return false;  // 尚未读取到有效电压
+        
+        // 2S 锂电池: 6.6V(~0%) ~ 8.4V(100%)
+        if (voltage >= 8.4f)
+            level = 100;
+        else if (voltage <= 6.6f)
+            level = 0;
+        else
+            level = (int)((voltage - 6.6f) / (8.4f - 6.6f) * 100.0f);
+        
+        charging = false;
+        discharging = true;
+        return true;
+    }
+
+    // Hover 使用引擎声作为成功提示音
+    virtual std::string_view GetSuccessSound() override {
+        return THROTTLE_SOUND;
+    }
+
+    virtual std::string GetBoardDescription() override {
+        return "一个双轮平衡小车形态机器人，搭载圆形 240x240 LCD 屏幕、ESP32-S3 MCU、8MB PSRAM、"
+               "2路智能舵机、IMU 姿态传感器、GC0308 摄像头，支持光剑控制。"
+               "2S 锂电池供电(6.6V-8.4V)。";
     }
 };
 

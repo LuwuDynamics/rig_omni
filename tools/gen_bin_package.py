@@ -59,6 +59,8 @@ def get_board_type():
                     return "rig-puppy", "RIG Puppy"
                 elif "CONFIG_BOARD_TYPE_HOVER=y" in content:
                     return "rig-hover", "RIG Hover"
+                elif "CONFIG_BOARD_TYPE_ARM=y" in content:
+                    return "rig-arm", "RIG Arm"
         except:
             pass
     return "rig-puppy", "RIG Puppy"

@@ -141,16 +141,16 @@ void Application::Initialize() {
         
         switch (event) {
             case NetworkEvent::Scanning:
-                display->ShowNotification(Lang::Strings::SCANNING_WIFI, 30000);
+                display->ShowNotification(Lang::Strings::SCANNING_WIFI(), 30000);
                 xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_DISCONNECTED);
                 break;
             case NetworkEvent::Connecting: {
                 if (data.empty()) {
                     // Cellular network - registering without carrier info yet
-                    display->SetStatus(Lang::Strings::REGISTERING_NETWORK);
+                    display->SetStatus(Lang::Strings::REGISTERING_NETWORK());
                 } else {
                     // WiFi or cellular with carrier info
-                    std::string msg = Lang::Strings::CONNECT_TO;
+                    std::string msg = Lang::Strings::CONNECT_TO();
                     msg += data;
                     msg += "...";
                     display->ShowNotification(msg.c_str(), 30000);
@@ -158,7 +158,7 @@ void Application::Initialize() {
                 break;
             }
             case NetworkEvent::Connected: {
-                std::string msg = Lang::Strings::CONNECTED_TO;
+                std::string msg = Lang::Strings::CONNECTED_TO();
                 msg += data;
                 display->ShowNotification(msg.c_str(), 30000);
                 xEventGroupSetBits(event_group_, MAIN_EVENT_NETWORK_CONNECTED);
@@ -175,19 +175,19 @@ void Application::Initialize() {
                 break;
             // Cellular modem specific events
             case NetworkEvent::ModemDetecting:
-                display->SetStatus(Lang::Strings::DETECTING_MODULE);
+                display->SetStatus(Lang::Strings::DETECTING_MODULE());
                 break;
             case NetworkEvent::ModemErrorNoSim:
-                Alert(Lang::Strings::ERROR, Lang::Strings::PIN_ERROR, "triangle_exclamation", Lang::Sounds::OGG_ERR_PIN);
+                Alert(Lang::Strings::ERROR(), Lang::Strings::PIN_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
                 break;
             case NetworkEvent::ModemErrorRegDenied:
-                Alert(Lang::Strings::ERROR, Lang::Strings::REG_ERROR, "triangle_exclamation", Lang::Sounds::OGG_ERR_REG);
+                Alert(Lang::Strings::ERROR(), Lang::Strings::REG_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
                 break;
             case NetworkEvent::ModemErrorInitFailed:
-                Alert(Lang::Strings::ERROR, Lang::Strings::MODEM_INIT_ERROR, "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION);
+                Alert(Lang::Strings::ERROR(), Lang::Strings::MODEM_INIT_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
                 break;
             case NetworkEvent::ModemErrorTimeout:
-                display->SetStatus(Lang::Strings::REGISTERING_NETWORK);
+                display->SetStatus(Lang::Strings::REGISTERING_NETWORK());
                 break;
         }
     });
@@ -223,7 +223,7 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
-            Alert(Lang::Strings::ERROR, last_error_message_.c_str(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+            Alert(Lang::Strings::ERROR(), last_error_message_.c_str(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
         }
 
         if (bits & MAIN_EVENT_NETWORK_CONNECTED) {
@@ -266,12 +266,12 @@ void Application::Run() {
             HandleWakeWordDetectedEvent();
         }
 
-        if (bits & MAIN_EVENT_VAD_CHANGE) {
-            if (GetDeviceState() == kDeviceStateListening) {
-                // VAD 状态变化时控制激光剑：说话时亮，静默时灭
-                Board::GetInstance().SetLaser(audio_service_.IsVoiceDetected());
-            }
-        }
+        // VAD 声控激光剑已关闭，仅保留 MCP 手动控制
+        // if (bits & MAIN_EVENT_VAD_CHANGE) {
+        //     if (GetDeviceState() == kDeviceStateListening) {
+        //         Board::GetInstance().SetLaser(audio_service_.IsVoiceDetected());
+        //     }
+        // }
 
         if (bits & MAIN_EVENT_SCHEDULE) {
             std::unique_lock<std::mutex> lock(mutex_);
@@ -342,7 +342,7 @@ void Application::HandleActivationDoneEvent() {
     has_server_time_ = ota_->HasServerTime();
 
     auto display = Board::GetInstance().GetDisplay();
-    std::string message = std::string(Lang::Strings::VERSION) + ota_->GetCurrentVersion();
+    std::string message = std::string(Lang::Strings::VERSION()) + ota_->GetCurrentVersion();
     display->ShowNotification(message.c_str());
     display->SetChatMessage("system", "");
 
@@ -354,7 +354,7 @@ void Application::HandleActivationDoneEvent() {
 
     Schedule([this]() {
         // Play the success sound to indicate the device is ready
-        audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+        audio_service_.PlaySound(Board::GetInstance().GetSuccessSound());
     });
 }
 
@@ -399,14 +399,14 @@ void Application::CheckAssetsVersion() {
         settings.EraseKey("download_url");
 
         char message[256];
-        snprintf(message, sizeof(message), Lang::Strings::FOUND_NEW_ASSETS, download_url.c_str());
-        Alert(Lang::Strings::LOADING_ASSETS, message, "cloud_arrow_down", Lang::Sounds::OGG_UPGRADE);
+        snprintf(message, sizeof(message), Lang::Strings::FOUND_NEW_ASSETS(), download_url.c_str());
+        Alert(Lang::Strings::LOADING_ASSETS(), message, "cloud_arrow_down", Lang::Sounds::OGG_UPGRADE());
         
         // Wait for the audio service to be idle for 3 seconds
         vTaskDelay(pdMS_TO_TICKS(3000));
         SetDeviceState(kDeviceStateUpgrading);
         board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
-        display->SetChatMessage("system", Lang::Strings::PLEASE_WAIT);
+        display->SetChatMessage("system", Lang::Strings::PLEASE_WAIT());
 
         bool success = assets.Download(download_url, [this, display](int progress, size_t speed) -> void {
             char buffer[32];
@@ -420,7 +420,7 @@ void Application::CheckAssetsVersion() {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         if (!success) {
-            Alert(Lang::Strings::ERROR, Lang::Strings::DOWNLOAD_ASSETS_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+            Alert(Lang::Strings::ERROR(), Lang::Strings::DOWNLOAD_ASSETS_FAILED(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
             vTaskDelay(pdMS_TO_TICKS(2000));
             SetDeviceState(kDeviceStateActivating);
             return;
@@ -441,7 +441,7 @@ void Application::CheckNewVersion() {
     auto& board = Board::GetInstance();
     while (true) {
         auto display = board.GetDisplay();
-        display->SetStatus(Lang::Strings::CHECKING_NEW_VERSION);
+        display->SetStatus(Lang::Strings::CHECKING_NEW_VERSION());
 
         esp_err_t err = ota_->CheckVersion();
         if (err != ESP_OK) {
@@ -454,8 +454,8 @@ void Application::CheckNewVersion() {
             char error_message[128];
             snprintf(error_message, sizeof(error_message), "code=%d, url=%s", err, ota_->GetCheckVersionUrl().c_str());
             char buffer[256];
-            snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED, retry_delay, error_message);
-            Alert(Lang::Strings::ERROR, buffer, "cloud_slash", Lang::Sounds::OGG_EXCLAMATION);
+            snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED(), retry_delay, error_message);
+            Alert(Lang::Strings::ERROR(), buffer, "cloud_slash", Lang::Sounds::OGG_EXCLAMATION());
 
             ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
             for (int i = 0; i < retry_delay; i++) {
@@ -473,17 +473,17 @@ void Application::CheckNewVersion() {
             ESP_LOGI(TAG, "Device needs activation");
             
             // 显示 wificonfig 表情
-            display->SetStatus(Lang::Strings::ACTIVATION);
+            display->SetStatus(Lang::Strings::ACTIVATION());
             display->SetEmotion("wificonfig");
             
             // 播报激活语音
-            audio_service_.PlaySound(Lang::Sounds::OGG_ACTIVATION);
+            audio_service_.PlaySound(Lang::Sounds::OGG_ACTIVATION());
             
             // 设备未激活，清除WiFi信息后重启（与长按按键逻辑一致）
             ESP_LOGW(TAG, "Device not activated, clearing WiFi credentials and restarting...");
             
             // 播放提示音
-            audio_service_.PlaySound(Lang::Sounds::OGG_SUCCESS);
+            audio_service_.PlaySound(Board::GetInstance().GetSuccessSound());
             vTaskDelay(pdMS_TO_TICKS(500));
             
             // 清除 NVS
@@ -519,7 +519,7 @@ void Application::InitializeProtocol() {
     auto display = board.GetDisplay();
     auto codec = board.GetAudioCodec();
 
-    display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
+    display->SetStatus(Lang::Strings::LOADING_PROTOCOL());
 
     if (ota_->HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
@@ -575,6 +575,10 @@ void Application::InitializeProtocol() {
             } else if (strcmp(state->valuestring, "stop") == 0) {
                 Schedule([this]() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
+                        // 机器说完话，播放结束音效（打断模式下不播放，避免干扰）
+                        if (GetAecMode() == kAecOff) {
+                            audio_service_.PlaySound(Lang::Sounds::OGG_OVER());
+                        }
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
                         } else {
@@ -597,10 +601,14 @@ void Application::InitializeProtocol() {
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
                 Schedule([this, display, message = std::string(text->valuestring)]() {
                     display->SetChatMessage("user", message.c_str());
+                    // 人说完话，播放发送音效（打断模式下不播放，避免干扰）
+                    if (GetAecMode() == kAecOff) {
+                        audio_service_.PlaySound(Lang::Sounds::OGG_MESSAGE_SEND());
+                    }
                     // 收到 STT 识别结果，切换到思考状态
                     if (GetDeviceState() == kDeviceStateListening) {
                         display->SetEmotion("thinking");
-                        display->SetStatus(Lang::Strings::THINKING);
+                        display->SetStatus(Lang::Strings::THINKING());
                     }
                 });
             }
@@ -634,7 +642,7 @@ void Application::InitializeProtocol() {
             auto message = cJSON_GetObjectItem(root, "message");
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(status) && cJSON_IsString(message) && cJSON_IsString(emotion)) {
-                Alert(status->valuestring, message->valuestring, emotion->valuestring, Lang::Sounds::OGG_VIBRATION);
+                Alert(status->valuestring, message->valuestring, emotion->valuestring, Lang::Sounds::OGG_VIBRATION());
             } else {
                 ESP_LOGW(TAG, "Alert command requires status, message and emotion");
             }
@@ -672,7 +680,7 @@ void Application::Alert(const char* status, const char* message, const char* emo
 void Application::DismissAlert() {
     if (GetDeviceState() == kDeviceStateIdle) {
         auto display = Board::GetInstance().GetDisplay();
-        display->SetStatus(Lang::Strings::STANDBY);
+        display->SetStatus(Lang::Strings::STANDBY());
         display->SetEmotion("neutral");
         display->SetChatMessage("system", "");
     }
@@ -813,7 +821,7 @@ void Application::HandleWakeWordDetectedEvent() {
         if (state == kDeviceStateListening) {
             protocol_->SendStartListening(GetDefaultListeningMode());
             audio_service_.ResetDecoder();
-            audio_service_.PlaySound(Lang::Sounds::OGG_POPUP);
+            audio_service_.PlaySound(Lang::Sounds::OGG_POPUP());
             // Re-enable wake word detection as it was stopped by the detection itself
             audio_service_.EnableWakeWordDetection(true);
         } else {
@@ -872,19 +880,19 @@ void Application::HandleStateChangedEvent() {
     switch (new_state) {
         case kDeviceStateUnknown:
         case kDeviceStateIdle:
-            display->SetStatus(Lang::Strings::STANDBY);
+            display->SetStatus(Lang::Strings::STANDBY());
             display->ClearChatMessages();  // Clear messages first
             display->SetEmotion("neutral"); // Then set emotion (wechat mode checks child count)
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(true);
             break;
         case kDeviceStateConnecting:
-            display->SetStatus(Lang::Strings::CONNECTING);
+            display->SetStatus(Lang::Strings::CONNECTING());
             display->SetEmotion("neutral");
             display->SetChatMessage("system", "");
             break;
         case kDeviceStateListening:
-            display->SetStatus(Lang::Strings::LISTENING);
+            display->SetStatus(Lang::Strings::LISTENING());
 
             // Make sure the audio processor is running
             if (play_popup_on_listening_ || !audio_service_.IsAudioProcessorRunning()) {
@@ -913,16 +921,17 @@ void Application::HandleStateChangedEvent() {
             // Play hi sound after ResetDecoder (in EnableVoiceProcessing) has been called
             if (play_popup_on_listening_) {
                 play_popup_on_listening_ = false;
-                audio_service_.PlaySound(Lang::Sounds::OGG_HI);
+                audio_service_.PlaySound(Lang::Sounds::OGG_HI());
             }
             break;
         case kDeviceStateSpeaking:
-            display->SetStatus(Lang::Strings::SPEAKING);
+            display->SetStatus(Lang::Strings::SPEAKING());
 
             // 进入说话状态时，确保激光剑已关闭（防止时序问题导致残留）
-            if (board.GetLaser()) {
-                board.SetLaser(false);
-            }
+            // 说话状态不再强制关激光剑（仅 MCP 手动控制）
+            // if (board.GetLaser()) {
+            //     board.SetLaser(false);
+            // }
 
             if (listening_mode_ != kListeningModeRealtime) {
                 audio_service_.EnableVoiceProcessing(false);
@@ -937,9 +946,9 @@ void Application::HandleStateChangedEvent() {
             break;
         case kDeviceStateStarting:
         case kDeviceStateActivating:
-            // 启动/激活状态，显示连接中
-            display->SetStatus(Lang::Strings::CONNECTING);
-            display->SetEmotion("connecting");
+            // 启动/激活状态，显示连接中（使用 wificonfig 表情）
+            display->SetStatus(Lang::Strings::CONNECTING());
+            display->SetEmotion("wificonfig");
             audio_service_.EnableVoiceProcessing(false);
             audio_service_.EnableWakeWordDetection(false);
             break;
@@ -1001,12 +1010,12 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     }
     ESP_LOGI(TAG, "Starting firmware upgrade from URL: %s", upgrade_url.c_str());
 
-    Alert(Lang::Strings::OTA_UPGRADE, Lang::Strings::UPGRADING, "download", Lang::Sounds::OGG_UPGRADE);
+    Alert(Lang::Strings::OTA_UPGRADE(), Lang::Strings::UPGRADING(), "download", Lang::Sounds::OGG_UPGRADE());
     vTaskDelay(pdMS_TO_TICKS(3000));
 
     SetDeviceState(kDeviceStateUpgrading);
 
-    std::string message = std::string(Lang::Strings::NEW_VERSION) + version_info;
+    std::string message = std::string(Lang::Strings::NEW_VERSION()) + version_info;
     display->SetChatMessage("system", message.c_str());
 
     board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
@@ -1026,7 +1035,7 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
         ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
         audio_service_.Start(); // Restart audio service
         board.SetPowerSaveLevel(GetUserPowerSaveLevel()); // Restore power save level
-        Alert(Lang::Strings::ERROR, Lang::Strings::UPGRADE_FAILED, "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
+        Alert(Lang::Strings::ERROR(), Lang::Strings::UPGRADE_FAILED(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
         vTaskDelay(pdMS_TO_TICKS(3000));
         return false;
     } else {
@@ -1113,15 +1122,15 @@ void Application::SetAecMode(AecMode mode) {
         switch (aec_mode_) {
         case kAecOff:
             audio_service_.EnableDeviceAec(false);
-            display->ShowNotification(Lang::Strings::RTC_MODE_OFF);
+            display->ShowNotification(Lang::Strings::RTC_MODE_OFF());
             break;
         case kAecOnServerSide:
             audio_service_.EnableDeviceAec(false);
-            display->ShowNotification(Lang::Strings::RTC_MODE_ON);
+            display->ShowNotification(Lang::Strings::RTC_MODE_ON());
             break;
         case kAecOnDeviceSide:
             audio_service_.EnableDeviceAec(true);
-            display->ShowNotification(Lang::Strings::RTC_MODE_ON);
+            display->ShowNotification(Lang::Strings::RTC_MODE_ON());
             break;
         }
 
