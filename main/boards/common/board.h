@@ -89,9 +89,11 @@ public:
     virtual void OnInitializationComplete() {}  // 初始化完成时调用，板级可重写
     virtual void OnWifiConfigStart() {}  // WiFi配网开始时调用，板级可重写
     virtual void OnWifiConfigEnd() {}  // WiFi配网结束时调用，板级可重写
+    virtual void OnWifiConnected() {}  // STA 拿到 IP 后调用，板级可重写
     virtual void CheckCalibration(Display* display, AudioService& audio) {}  // 检查标定状态，板级可重写
     virtual void SetLaser(bool on) {}  // 激光剑控制，板级可重写
     virtual bool GetLaser() { return false; }  // 查询激光剑状态，板级可重写
+    virtual void EnterDeepSleep() {}  // 进入深度睡眠（语音/远程关机），板级可重写；默认空实现
     virtual std::string GetBoardDescription() { return ""; }  // 板级硬件描述，子类覆写
     virtual std::string_view GetSuccessSound();  // 板级成功提示音，默认 OGG_SUCCESS
 };

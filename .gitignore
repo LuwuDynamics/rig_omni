@@ -5,6 +5,7 @@ dist/
 releases/
 tmp/
 test_firmware/
+outputs/
 
 # ===== ESP-IDF 组件与配置 =====
 components/
@@ -14,16 +15,24 @@ sdkconfig
 sdkconfig.old
 *.bin
 
+# 本地烧录包（Bin-arm-cn、Bin-hover-gb 等）
+/Bin-*/
+
 # ===== 自动生成文件 =====
 main/mmap_generate_emoji.h
 mmap_generate_*.h
 # wificonfig.eaf 由构建系统根据 FIRMWARE_REGION 自动生成
 main/boards/*/emoji/wificonfig.eaf
+main/assets/lang_config.h
 
 # ===== 环境与缓存 =====
 .env
 .cache/
 .clangd
+
+# ===== 本地未跟踪归档 =====
+# 保留本机生成物、素材和临时文件，不纳入源码提交。
+/.local-untracked/
 
 # ===== IDE / 编辑器配置 =====
 .vscode/
@@ -41,6 +50,8 @@ __pycache__/
 
 # ===== 已迁移至 tools/ 的开发脚本 =====
 scripts/
+# 火山引擎批量生成的试听音频；确认效果后再手工接入正式资源。
+tools/tars_voice_output/
 
 # ===== help 文档 =====
 help/

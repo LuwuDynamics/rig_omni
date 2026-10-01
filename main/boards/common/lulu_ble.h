@@ -4,7 +4,7 @@
 extern "C" {
 #endif
 
-// 初始化并启动 BLE 广播（UUID 与 XGO 一致，广播名 LULU-XXXX）
+// 初始化并启动 BLE 广播（遥控 GATT UUID，广播名 LULU-XXXX）
 void lulu_ble_init();
 
 // 停止 BLE 广播

@@ -60,12 +60,60 @@ static bool OnFlushIoReady(const esp_lcd_panel_io_handle_t panel_io,
 }
 
 // Flush callback for emote
+//
+// IDF 的 esp_lcd panel_io 不设置 SPI_TRANS_DMA_USE_PSRAM，PSRAM 条带缓冲每次
+// flush 都会临时 malloc 一块内部 DMA 副本（spi_master setup_dma_priv_buffer），
+// 内存紧张时刷屏失败。这里改为两块持久内部 bounce 缓冲（对应 SPI trans queue
+// depth 2，轮转使用），每帧只做 memcpy，不再有临时分配。
+static uint16_t* s_flush_bounce[2] = {};
+static uint8_t s_flush_bounce_idx = 0;
+static size_t s_flush_bounce_size = 0;
+
 static void OnFlushCallback(int x_start, int y_start, int x_end, int y_end, const void* data, emote_handle_t handle)
 {
     esp_lcd_panel_handle_t panel = (esp_lcd_panel_handle_t)emote_get_user_data(handle);
     if (panel != nullptr) {
-        esp_lcd_panel_draw_bitmap(panel, x_start, y_start, x_end, y_end, data);
+        const size_t len = static_cast<size_t>(x_end - x_start) * (y_end - y_start) * sizeof(uint16_t);
+        const void* src = data;
+        if (len <= s_flush_bounce_size && s_flush_bounce[0] != nullptr && s_flush_bounce[1] != nullptr) {
+            memcpy(s_flush_bounce[s_flush_bounce_idx], data, len);
+            src = s_flush_bounce[s_flush_bounce_idx];
+            s_flush_bounce_idx ^= 1;
+        }
+        // 刷屏失败（多为内部内存紧张导致 DMA 副本分配失败）不中断渲染流程：
+        // GFX 引擎下一帧会重新触发刷屏，此处仅记录并跳过，避免单次失败影响整体。
+        esp_err_t err = esp_lcd_panel_draw_bitmap(panel, x_start, y_start, x_end, y_end, src);
+        if (err != ESP_OK) {
+            ESP_LOGW(TAG, "draw_bitmap failed: %s, frame skipped (will redraw next flush)", esp_err_to_name(err));
+        }
     }
+}
+
+static void AllocateFlushBounce(size_t buf_pixels)
+{
+    s_flush_bounce_size = buf_pixels * sizeof(uint16_t);
+    for (auto& buf : s_flush_bounce) {
+        buf = static_cast<uint16_t*>(heap_caps_malloc(s_flush_bounce_size, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL));
+    }
+    if (s_flush_bounce[0] != nullptr && s_flush_bounce[1] != nullptr) {
+        ESP_LOGI(TAG, "Flush bounce buffers: 2 x %u bytes (internal DMA)", s_flush_bounce_size);
+    } else {
+        ESP_LOGW(TAG, "Flush bounce allocation failed, falling back to per-transfer bounce");
+        for (auto& buf : s_flush_bounce) {
+            heap_caps_free(buf);
+            buf = nullptr;
+        }
+        s_flush_bounce_size = 0;
+    }
+}
+
+static void FreeFlushBounce()
+{
+    for (auto& buf : s_flush_bounce) {
+        heap_caps_free(buf);
+        buf = nullptr;
+    }
+    s_flush_bounce_size = 0;
 }
 
 // ============================================================================
@@ -84,6 +132,9 @@ static emote_handle_t InitializeEmote(const esp_lcd_panel_handle_t panel, const 
             .swap = true,
             .double_buffer = true,
             .buff_dma = false,
+            // GFX 条带渲染缓冲放到 PSRAM，降低内部 RAM 压力。
+            // 注意不能与 buff_dma 同时开启；flush bounce 仍留在内部 DMA 内存（SPI3 不支持 PSRAM DMA）。
+            .buff_spiram = true,
         },
         .gfx_emote = {
             .h_res = width,
@@ -97,7 +148,8 @@ static emote_handle_t InitializeEmote(const esp_lcd_panel_handle_t panel, const 
             .task_priority = 5,
             .task_stack = 6 * 1024,
             .task_affinity = 0,
-            .task_stack_in_ext = false,
+            // 渲染任务栈迁到 PSRAM，进一步释放内部 RAM
+            .task_stack_in_ext = true,
         },
         .flush_cb = OnFlushCallback,
         .user_data = (void*)panel,
@@ -108,6 +160,9 @@ static emote_handle_t InitializeEmote(const esp_lcd_panel_handle_t panel, const 
         ESP_LOGE(TAG, "Failed to initialize emote");
         return nullptr;
     }
+
+    // 条带缓冲确定后分配持久 SPI bounce（在首次 flush 前完成）
+    AllocateFlushBounce(emote_cfg.buffers.buf_pixels);
 
     return emote_handle;
 }
@@ -143,6 +198,7 @@ EmoteDisplay::~EmoteDisplay()
     }
     // 释放 emote 句柄
     if (emote_handle_) {
+        FreeFlushBounce();
         emote_deinit(emote_handle_);
         emote_handle_ = nullptr;
     }

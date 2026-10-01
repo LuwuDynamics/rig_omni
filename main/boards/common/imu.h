@@ -1,6 +1,6 @@
 #ifndef _IMU_H_
 #define _IMU_H_
-#include "xgo.h"
+#include "robot.h"
 // IMU (QMI8658C) 接口
 void imu_init();
 void imu_read_once();

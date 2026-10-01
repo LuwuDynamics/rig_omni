@@ -1,5 +1,5 @@
 #include "idle_motion.h"
-#include "xgo.h"
+#include "robot.h"
 #include <math.h>
 #include <esp_timer.h>
 #include <esp_random.h>
@@ -7,8 +7,8 @@
 
 static const char* TAG = "IDLE_MOTION";
 
-// 默认打开
-static bool enabled = true;
+// 默认关闭；需要时由 MCP 工具显式打开
+static bool enabled = false;
 
 // 正弦相位 (rad) — 达到 2π 时完成一个周期，触发换频
 static float phase_q0 = 0.0f;
@@ -52,13 +52,14 @@ static void maybe_refresh_freq(float* phase, float* freq) {
 }
 
 void idle_motion_init() {
-    enabled = true;
+    enabled = false;
     phase_q0 = 0.0f;
     phase_q4 = 0.0f;
     freq_q0 = random_freq();
     freq_q4 = random_freq();
     last_update_us = 0;
-    ESP_LOGI(TAG, "Idle motion initialized (q0_freq=%.2fHz, q4_freq=%.2fHz)", freq_q0, freq_q4);
+    ESP_LOGI(TAG, "Idle motion initialized OFF (q0_freq=%.2fHz, q4_freq=%.2fHz)",
+             freq_q0, freq_q4);
 }
 
 void idle_motion_update() {

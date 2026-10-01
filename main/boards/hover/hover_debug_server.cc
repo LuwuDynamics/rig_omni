@@ -1,5 +1,5 @@
 #include "hover_debug_server.h"
-#include "xgo.h"
+#include "robot.h"
 #include "imu.h"
 #include <esp_http_server.h>
 #include <esp_log.h>
@@ -69,17 +69,17 @@ static const char* INDEX_HTML = R"rawliteral(
         const VAR_LABELS = [
             'head', 'delta_pos', 'POS_kp', 'POS_kd', 'VEL_kp', 'VEL_ki', 'PIT_kp', 'PIT_kd', 'YAW_kp', 'delta_yaw',
             'LQR_k0', 'LQR_k1', 'LQR_k2', 'LQR_k3',
-            'var14', 'var15', 'var16', 'var17', 'var18', 'var19'
+            'GIM_kp', 'GIM_kd', 'GIM_ff', 'var17', 'var18', 'var19'
         ];
         function createVarInputs() {
             const grid = document.getElementById('var-grid');
             for (let i = 0; i < VAR_COUNT; i++) {
                 const div = document.createElement('div');
-                div.className = 'var-item' + (i >= 14 ? ' reserved' : '');
+                div.className = 'var-item' + (i >= 17 ? ' reserved' : '');
                 div.innerHTML = `
                     <label>${VAR_LABELS[i]}:</label>
-                    <input type="number" step="any" id="var${i}" value="0" ${i >= 14 ? 'disabled' : ''}>
-                    <button onclick="setVar(${i})" ${i >= 14 ? 'disabled' : ''}>Set</button>
+                    <input type="number" step="any" id="var${i}" value="0" ${i >= 17 ? 'disabled' : ''}>
+                    <button onclick="setVar(${i})" ${i >= 17 ? 'disabled' : ''}>Set</button>
                 `;
                 grid.appendChild(div);
             }
@@ -92,6 +92,12 @@ static const char* INDEX_HTML = R"rawliteral(
                     document.getElementById('roll').textContent = data.imu.roll.toFixed(2);
                     document.getElementById('pitch').textContent = data.imu.pitch.toFixed(2);
                     document.getElementById('yaw').textContent = data.imu.yaw.toFixed(2);
+                    if (data.vars) {
+                        for (let i = 0; i < data.vars.length; i++) {
+                            const el = document.getElementById('var' + i);
+                            if (el && document.activeElement !== el) el.value = data.vars[i];
+                        }
+                    }
                     document.getElementById('status').textContent = 'Updated: ' + new Date().toLocaleTimeString();
                 })
                 .catch(e => {
@@ -100,7 +106,7 @@ static const char* INDEX_HTML = R"rawliteral(
         }
         
         function setVar(index) {
-            if (index >= 14) return;
+            if (index >= 17) return;
             const value = parseFloat(document.getElementById('var' + index).value);
             fetch('/api/set?i=' + index + '&v=' + value)
                 .then(r => r.json())
@@ -136,6 +142,29 @@ static esp_err_t data_handler(httpd_req_t *req) {
     cJSON_AddNumberToObject(imu, "pitch", pitch);
     cJSON_AddNumberToObject(imu, "yaw", yaw);
     cJSON_AddItemToObject(root, "imu", imu);
+
+    cJSON *vars = cJSON_CreateArray();
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(target_head_pos));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(0));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(pid_pos.fpKp));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(pid_pos.fpKd));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(pid_vel.fpKp));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(pid_vel.fpKi));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(pid_pit.fpKp));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(kd_pit));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(imu_zero));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(0));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(lqr_k[0]));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(lqr_k[1]));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(lqr_k[2]));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(lqr_k[3]));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(gimbal_kp));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(gimbal_kd));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(gimbal_ff));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(0));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(0));
+    cJSON_AddItemToArray(vars, cJSON_CreateNumber(0));
+    cJSON_AddItemToObject(root, "vars", vars);
 
     char *json_str = cJSON_PrintUnformatted(root);
     httpd_resp_set_type(req, "application/json");
@@ -206,6 +235,15 @@ static esp_err_t set_handler(httpd_req_t *req) {
                 break;
             case 13:
                 lqr_k[3] = value;
+                break;
+            case 14:
+                gimbal_kp = value;
+                break;
+            case 15:
+                gimbal_kd = value;
+                break;
+            case 16:
+                gimbal_ff = value;
                 break;
             default:
                 break;

@@ -314,7 +314,7 @@ def generate_index_json(assets_dir, srmodels, text_font, emoji_collection, icon_
     print(f"Generated: {index_path}")
 
 
-def generate_config_json(build_dir, assets_dir):
+def generate_config_json(build_dir, assets_dir, assets_size):
     """Generate config.json file"""
     # Get absolute path of current working directory
     workspace_dir = os.path.abspath(os.path.join(os.path.dirname(__file__)))
@@ -324,7 +324,7 @@ def generate_config_json(build_dir, assets_dir):
         "assets_path": os.path.join(workspace_dir, "build/assets"),
         "image_file": os.path.join(workspace_dir, "build/output/assets.bin"),
         "lvgl_ver": "9.3.0",
-        "assets_size": "0x800000",
+        "assets_size": hex(assets_size),
         "support_format": ".png, .gif, .jpg, .bin, .json, .eaf",
         "name_length": "32",
         "split_height": "0",
@@ -354,6 +354,12 @@ def main():
 
     parser.add_argument('--res_path', help='Path to res directory')
     parser.add_argument('--target_board', help='Path to target board directory')
+    parser.add_argument(
+        '--assets_size',
+        type=lambda value: int(value, 0),
+        default=0x800000,
+        help='Assets partition size in bytes (default: 0x800000)',
+    )
     
     args = parser.parse_args()
     
@@ -387,7 +393,7 @@ def main():
     generate_index_json(assets_dir, srmodels, text_font, emoji_collection, icon_collection, layout_json)
     
     # Generate config.json
-    config_path = generate_config_json(build_dir, assets_dir)
+    config_path = generate_config_json(build_dir, assets_dir, args.assets_size)
     
     # Use spiffs_assets_gen.py to package final build/assets.bin
     try:

@@ -11,9 +11,17 @@ idf_build_set_property(MINIMAL_BUILD ON)
 
 set(PROJECT_VER "3.7.0")  # 默认兜底值，由版本脚本或 idf.py board-select 时覆盖
 
-# Parse sdkconfig to determine project name based on board type
-if(EXISTS "${CMAKE_SOURCE_DIR}/sdkconfig")
-    file(STRINGS "${CMAKE_SOURCE_DIR}/sdkconfig" SDKCONFIG_LINES)
+# Parse the active sdkconfig to determine project name based on board type.
+# Packaging builds pass an isolated SDKCONFIG path so they do not overwrite the
+# developer's sdkconfig in the source tree.
+if(DEFINED SDKCONFIG)
+    get_filename_component(RIG_SDKCONFIG_FILE "${SDKCONFIG}" ABSOLUTE BASE_DIR "${CMAKE_SOURCE_DIR}")
+else()
+    set(RIG_SDKCONFIG_FILE "${CMAKE_SOURCE_DIR}/sdkconfig")
+endif()
+
+if(EXISTS "${RIG_SDKCONFIG_FILE}")
+    file(STRINGS "${RIG_SDKCONFIG_FILE}" SDKCONFIG_LINES)
     foreach(LINE ${SDKCONFIG_LINES})
         if(LINE MATCHES "CONFIG_BOARD_TYPE_PUPPY=y")
             set(PROJECT_BIN_NAME "rig-puppy")
@@ -24,9 +32,9 @@ if(EXISTS "${CMAKE_SOURCE_DIR}/sdkconfig")
         elseif(LINE MATCHES "CONFIG_BOARD_TYPE_ARM=y")
             set(PROJECT_BIN_NAME "rig-arm")
             set(BOARD_DIR "arm")
-        elseif(LINE MATCHES "CONFIG_BOARD_TYPE_BOT=y")
-            set(PROJECT_BIN_NAME "rig-bot")
-            set(BOARD_DIR "bot")
+        elseif(LINE MATCHES "CONFIG_BOARD_TYPE_TARS=y")
+            set(PROJECT_BIN_NAME "rig-tars")
+            set(BOARD_DIR "tars")
         endif()
     endforeach()
 endif()

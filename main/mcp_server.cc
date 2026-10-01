@@ -6,6 +6,7 @@
 #include "mcp_server.h"
 #include <esp_log.h>
 #include <esp_app_desc.h>
+#include <esp_timer.h>
 #include <algorithm>
 #include <cstring>
 #include <esp_pthread.h>
@@ -184,6 +185,37 @@ void McpServer::AddCommonTools() {
             
             ESP_LOGI("McpServer", "Power mode set to: %s (sleep_mode=%d)", mode_name.c_str(), sleep_enabled);
             return std::string("Power mode set to: " + mode_name);
+        });
+
+    // Power off / deep sleep: 延迟 3 秒执行，让本轮 TTS 告别语播完再睡
+    AddTool("self.power_off",
+        "关闭设备电源并进入深度睡眠。当用户说关机、关闭设备、去睡觉、休眠、深度睡眠 等时调用此工具。\n"
+        "Power off the device and enter deep sleep (wake by touch).\n"
+        "Return:\n"
+        "  关机确认信息 / Shutdown confirmation.",
+        PropertyList(),
+        [&board](const PropertyList& properties) -> ReturnValue {
+            static bool power_off_scheduled = false;
+            if (power_off_scheduled) {
+                return std::string("Shutdown already scheduled");
+            }
+            power_off_scheduled = true;
+            esp_timer_create_args_t timer_args = {
+                .callback = [](void* ctx) {
+                    static_cast<Board*>(ctx)->EnterDeepSleep();
+                },
+                .arg = &board,
+                .dispatch_method = ESP_TIMER_TASK,
+                .name = "power_off",
+            };
+            esp_timer_handle_t power_off_timer = nullptr;
+            if (esp_timer_create(&timer_args, &power_off_timer) != ESP_OK ||
+                esp_timer_start_once(power_off_timer, 3 * 1000000ULL) != ESP_OK) {
+                power_off_scheduled = false;
+                throw std::runtime_error("Failed to schedule power off");
+            }
+            ESP_LOGI("McpServer", "Deep sleep scheduled in 3 seconds");
+            return std::string("Powering off in 3 seconds");
         });
 
     // Language control

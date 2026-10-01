@@ -94,9 +94,15 @@ static void calibration_bias_qmi8658c(void) {
             gyro_bias[2] += gyro_z;
             qmi_countInit++;
         } else {
+            static const float kMaxGyroBiasDps = 5.0f;
             for (int i = 0; i < 3; i++) {
                 acc_bias[i] /= (float)QMI8658C_CALIBRATION_COUNT;
                 gyro_bias[i] /= (float)QMI8658C_CALIBRATION_COUNT;
+                if (fabsf(gyro_bias[i]) > kMaxGyroBiasDps) {
+                    ESP_LOGW(TAG, "gyro_bias[%d]=%.2f dps > %.1f, treat as motion, set to 0",
+                             i, gyro_bias[i], kMaxGyroBiasDps);
+                    gyro_bias[i] = 0.0f;
+                }
             }
             isIMUInit = 1;
         }
@@ -212,9 +218,14 @@ void imu_read_once() {
 
     calibration_bias_qmi8658c();
 
+    // TARS publishes live attitude from the first valid sample.  Its
+    // background calibration flag still turns to OK once the sample window
+    // completes, but the status screen no longer sits at 0.0 meanwhile.
+#if !defined(CONFIG_BOARD_TYPE_TARS)
     if (!isIMUInit) {
         return;
     }
+#endif
 
     // gyro_x -= gyro_bias[0];
     // gyro_y -= gyro_bias[1];
@@ -246,7 +257,18 @@ void imu_read_once() {
     }
     pit_g = pit_g + pit_gyro * (float)qmi_d_imu_time;
     qmi_last_imu_time = current_time;
-    yaw = yaw - gyro_yaw * (float)qmi_d_imu_time;
+    // yaw 无磁力计绝对校正，纯陀螺积分。gyro_y 通道的静止零偏由开机校准
+    // 窗口算出（gyro_bias[1]），必须减去——否则零偏原样进入积分，屏幕上
+    // Y 值会持续爬升。补偿后再叠加静止死区（<1.5°/s 视为零漂丢弃）。
+    // roll/pitch 有加速度计互补滤波抗漂，不受影响。
+    constexpr float kYawGyroDeadZoneDps = 1.5f;
+    float gyro_yaw_comp = gyro_yaw - gyro_bias[1];
+    if (fabsf(gyro_yaw_comp) < kYawGyroDeadZoneDps) {
+        gyro_yaw_comp = 0.0f;
+    }
+    if (isIMUInit) {  // bias 校准完成后才开始积分，校准窗口内 yaw 保持 0
+        yaw = yaw - gyro_yaw_comp * (float)qmi_d_imu_time;
+    }
 }
 
 // ---------------------- 清理 ----------------------

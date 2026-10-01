@@ -1,0 +1,12 @@
+[
+  {
+    "type": "anim",
+    "name": "eye_anim",
+    "align": "GFX_ALIGN_CENTER",
+    "x": 0,
+    "y": 0,
+    "anim": {
+      "mirror": "false"
+    }
+  }
+]

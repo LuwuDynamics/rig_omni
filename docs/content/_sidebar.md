@@ -89,3 +89,6 @@
   * [Getting Started](Getting%20Started.md)
   * [Contributing](Contributing%20Guidelines.md)
   * [Troubleshooting](Troubleshooting%20and%20FAQ.md)
+
+* **教学资源**
+  * [Home Assistant 与 MCP 初中课程包](教学资源/Home%20Assistant%20与%20MCP%20初中物联网和人工智能课程包.md)

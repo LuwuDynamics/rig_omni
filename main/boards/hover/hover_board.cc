@@ -24,8 +24,8 @@
 #include <nvs_flash.h>
 
 #include "esp_lcd_gc9a01.h"
-#include "xgo.h"
-#include "xgo_action.h"
+#include "robot.h"
+#include "robot_action.h"
 #include "imu.h"
 #include "hover_debug_server.h"
 
@@ -60,8 +60,8 @@ private:
     Button touch_button_;
     emote::EmoteDisplay* display_ = nullptr;  // AAF动画显示
     Esp32Camera* camera_ = nullptr;  // 初始化为nullptr
-    TaskHandle_t xgo_task_handle_ = nullptr;
-    TaskHandle_t xgo_rx_task_handle_ = nullptr;
+    TaskHandle_t robot_task_handle_ = nullptr;
+    TaskHandle_t motor_rx_task_handle_ = nullptr;
     TaskHandle_t imu_task_handle_ = nullptr;
     int64_t button_press_start_time_ = 0;  // 按键按下时间戳
     esp_timer_handle_t long_press_timer_ = nullptr;  // 长按检测定时器
@@ -82,7 +82,7 @@ private:
         ESP_LOGI(TAG, "Initialize UART");
         uart_driver_install(UART_NUM_2, 1024, 1024, 0, NULL, 0);
         uart_param_config(UART_NUM_2, &uart_cfg);
-        uart_set_pin(UART_NUM_2, XGO_UART_TX_PIN, XGO_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        uart_set_pin(UART_NUM_2, MOTOR_UART_TX_PIN, MOTOR_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
         WriteByte_P_V(3, 1500, 1300);
     }
 
@@ -404,6 +404,43 @@ private:
                 return true;
             });
 
+        mcp_server.AddTool("self.robot.set_mode",
+            "切换到小车模式或云台模式。用户说「变成云台」「云台模式」「放到台座」时 mode=gimbal；"
+            "用户说「变成小车」「小车模式」「恢复平衡」时 mode=car。",
+            PropertyList({
+                Property("mode", kPropertyTypeString)
+            }), [](const PropertyList& properties) -> ReturnValue {
+                auto mode = properties["mode"].value<std::string>();
+                if (mode == "gimbal" || mode == "yun_tai" || mode == "云台") {
+                    SetControlMode(1);
+                    return std::string("已切换到云台模式");
+                }
+                if (mode == "car" || mode == "xiao_che" || mode == "小车") {
+                    SetControlMode(0);
+                    return std::string("已切换到小车模式");
+                }
+                return std::string("未知模式，请使用 car 或 gimbal");
+            });
+
+        mcp_server.AddTool("self.robot.pitch",
+            "云台模式下调整机身俯仰，仅云台模式生效；小车模式调用则直接返回不动作。"
+            "用户说抬头、头抬高：relative=1，angle 为正（不说度数默认 15）；"
+            "说低头、低下：relative=1，angle 为负（不说度数默认 -15）；"
+            "说设定到某角度、俯仰到某度：relative=0，angle 为绝对角度。"
+            "0 为水平，正为抬头（内部会取反写入目标），负为低头，范围 ±45。",
+            PropertyList({
+                Property("angle", kPropertyTypeInteger, 15, -45, 45),
+                Property("relative", kPropertyTypeInteger, 0, 0, 1),
+            }), [](const PropertyList& properties) -> ReturnValue {
+                if (control_mode != 1) {
+                    return std::string("当前是小车模式，俯仰调整仅云台模式有效");
+                }
+                int angle = properties["angle"].value<int>();
+                bool relative = properties["relative"].value<int>() != 0;
+                SetGimbalPitch((float)angle, relative);
+                return std::string("云台俯仰已设为 ") + std::to_string((int)gimbal_pitch_target) + "度";
+            });
+
         mcp_server.AddTool("self.status.battery",
             "查询当前电池电量,返回剩余电量百分比",
             PropertyList(std::vector<Property>{}), [this](const PropertyList& properties) -> ReturnValue {
@@ -438,24 +475,24 @@ public:
         // IMU 初始化
         imu_init();
 
-        // XGO 控制任务
+        // 机器人控制任务
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_control();
+                robot_control();
             }
             vTaskDelete(NULL);
-        }, "xgo_task", 4096, this, 12, &xgo_task_handle_, 0);
+        }, "robot_task", 4096, this, 12, &robot_task_handle_, 0);
 
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_rx();
+                motor_rx();
                 vTaskDelay(pdMS_TO_TICKS(3));
             }
             vTaskDelete(NULL);
-        }, "xgo_rx_task", 4096, this, 12, &xgo_rx_task_handle_, 1);
-        ESP_LOGI(TAG, "XGO control tasks created");
+        }, "motor_rx_task", 4096, this, 12, &motor_rx_task_handle_, 1);
+        ESP_LOGI(TAG, "Robot control tasks created");
 
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
@@ -535,13 +572,6 @@ public:
         // 播放开机音效
         auto& app = Application::GetInstance();
         app.PlaySound(STARTUP_SOUND);
-        
-        // 启动调试Web服务器（WiFi连接后可通过IP访问）
-        if (WifiManager::GetInstance().IsConnected()) {
-            hover_debug_server_start();
-            std::string ip = WifiManager::GetInstance().GetIpAddress();
-            ESP_LOGI(TAG, "Debug server started at http://%s", ip.c_str());
-        }
     }
 
     virtual void OnWifiConfigStart() override {
@@ -553,13 +583,17 @@ public:
 
         Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFI_SUCCESS());
         ESP_LOGI(TAG, "WiFi config end, sit reset (stand up) and play success audio");
-        
-        // 启动调试Web服务器
-        if (!hover_debug_server_is_running() && WifiManager::GetInstance().IsConnected()) {
+    }
+
+    virtual void OnWifiConnected() override {
+        std::string ip = WifiManager::GetInstance().GetIpAddress();
+        // sdkconfig 默认日志级别为 WARN，必须用 LOGW 才能在串口看到
+        ESP_LOGW(TAG, "WiFi IP: %s", ip.c_str());
+
+        if (!hover_debug_server_is_running()) {
             hover_debug_server_start();
-            std::string ip = WifiManager::GetInstance().GetIpAddress();
-            ESP_LOGI(TAG, "Debug server started at http://%s", ip.c_str());
         }
+        ESP_LOGW(TAG, "Debug panel: http://%s/", ip.c_str());
     }
 
     // 从舵机 ID=3 的 PRESENT_VOLTAGE 寄存器读取电池电压

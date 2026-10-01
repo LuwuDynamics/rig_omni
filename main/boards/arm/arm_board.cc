@@ -29,8 +29,8 @@
 #include <esp_random.h>
 
 #include "esp_lcd_gc9a01.h"
-#include "xgo.h"
-#include "xgo_action.h"
+#include "robot.h"
+#include "robot_action.h"
 #include "idle_motion.h"
 #include "imu.h"
 
@@ -58,8 +58,8 @@ private:
     Button touch_button_;
     emote::EmoteDisplay* display_ = nullptr;  // AAF动画显示
     Esp32Camera* camera_ = nullptr;  // 初始化为nullptr
-    TaskHandle_t xgo_task_handle_ = nullptr;
-    TaskHandle_t xgo_rx_task_handle_ = nullptr;
+    TaskHandle_t robot_task_handle_ = nullptr;
+    TaskHandle_t motor_rx_task_handle_ = nullptr;
     int64_t button_press_start_time_ = 0;  // boot按键按下时间戳
     esp_timer_handle_t long_press_timer_ = nullptr;  // boot按键长按检测定时器
     bool nvs_reset_emotion_shown_ = false;  // boot按键是否已显示 nvs_reset 表情
@@ -77,7 +77,7 @@ private:
         };
         uart_driver_install(UART_NUM_2, 1024, 1024, 0, NULL, 0);
         uart_param_config(UART_NUM_2, &uart_cfg);
-        uart_set_pin(UART_NUM_2, XGO_UART_TX_PIN, XGO_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        uart_set_pin(UART_NUM_2, MOTOR_UART_TX_PIN, MOTOR_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     }
 
     void InitializeLaser() {
@@ -381,21 +381,6 @@ private:
             ESP_LOGI(TAG, "Touch double-click: wiggle");
             touch_wiggle_trigger();
         }, 2);
-
-        // 双击切换 AEC 开关（标定模式下禁用）
-        boot_button_.OnDoubleClick([]() {
-            if (calibrate_mode == 1) {
-                return;
-            }
-            auto& app = Application::GetInstance();
-            if (app.GetAecMode() == kAecOff) {
-                app.SetAecMode(kAecOnServerSide);
-                app.PlaySound(Lang::Sounds::OGG_OPEN_AEC());
-            } else {
-                app.SetAecMode(kAecOff);
-                app.PlaySound(Lang::Sounds::OGG_CLOSE_AEC());
-            }
-        });
     }
 
     void Calibrate(int mode) {
@@ -588,7 +573,7 @@ private:
         mcp_server.AddTool("self.arm.idle_motion",
             "控制机械臂空闲微动。空闲时（没有动作任务时）机械臂会以第一自由度(底座左右旋转)"
             "和第五自由度(腕部上下)微微晃动，模拟呼吸般的自然姿态。"
-            "enable=1 打开微动(默认)，enable=0 关闭微动，关闭后机械臂完全静止。"
+            "enable=1 打开微动，enable=0 关闭微动(默认)，关闭后机械臂完全静止。"
             "用户说'别晃了''停下来''不要动'等应关闭，说'动起来''恢复微动'等应打开。",
             PropertyList({
                 Property("enable", kPropertyTypeInteger, 0, 1),
@@ -719,10 +704,10 @@ private:
             [this](const PropertyList& properties) -> ReturnValue {
                 int y = properties["y"].value<int>();
                 arm_y = arm_y + y/100.0;
-                if(arm_x >0.05){
-                    arm_x = 0.05;
-                }else if(arm_x <-0.05){
-                    arm_x = -0.05;
+                if(arm_y >0.05){
+                    arm_y = 0.05;
+                }else if(arm_y <-0.05){
+                    arm_y = -0.05;
                 }
                 return true;
             });
@@ -877,26 +862,26 @@ public:
         imu_init();
         rig_arm_ik_init(&arm_ik, 0.05);
         idle_motion_init();
-        // XGO 控制任务
+        // 机器人控制任务
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_control();
-                vTaskDelay(pdMS_TO_TICKS(XGO_TASK_INTERVAL_MS));
+                robot_control();
+                vTaskDelay(pdMS_TO_TICKS(ROBOT_TASK_INTERVAL_MS));
             }
             vTaskDelete(NULL);
-        }, "xgo_task", 4096, this, 5, &xgo_task_handle_, 0);
+        }, "robot_task", 4096, this, 5, &robot_task_handle_, 0);
 
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_rx();
+                motor_rx();
                 imu_read_once();
-                vTaskDelay(pdMS_TO_TICKS(XGO_RX_TASK_INTERVAL_MS));
+                vTaskDelay(pdMS_TO_TICKS(MOTOR_RX_TASK_INTERVAL_MS));
             }
             vTaskDelete(NULL);
-        }, "xgo_rx_task", 4096, this, 5, &xgo_rx_task_handle_, 1);
-        ESP_LOGI(TAG, "XGO control tasks created");
+        }, "motor_rx_task", 4096, this, 5, &motor_rx_task_handle_, 1);
+        ESP_LOGI(TAG, "Robot control tasks created");
     }
 
     virtual AudioCodec* GetAudioCodec() override {

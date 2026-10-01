@@ -107,14 +107,15 @@ void WifiBoard::TryWifiConnect() {
 
 void WifiBoard::OnNetworkEvent(NetworkEvent event, const std::string& data) {
     switch (event) {
-        case NetworkEvent::Connected:
+        case NetworkEvent::Connected: {
             // Stop timeout timer
             esp_timer_stop(connect_timer_);
             in_config_mode_ = false;
-            ESP_LOGI(TAG, "Connected to WiFi: %s", data.c_str());
-// 注意：不再自动释放蓝牙内存，以支持 BLE 遥控模式
-            // 如果需要释放内存，可以在确定不需要 BLE 功能时手动调用
+            std::string ip = WifiManager::GetInstance().GetIpAddress();
+            ESP_LOGI(TAG, "Connected to WiFi: %s, IP: %s", data.c_str(), ip.c_str());
+            Board::GetInstance().OnWifiConnected();
             break;
+        }
         case NetworkEvent::Scanning:
             ESP_LOGI(TAG, "WiFi scanning");
             {
@@ -184,7 +185,11 @@ void WifiBoard::StartWifiConfigMode() {
         hint += Lang::Strings::ACCESS_VIA_BROWSER();
         hint += wifi_manager.GetApWebUrl();
 
+#if CONFIG_BOARD_TYPE_TARS
+        Application::GetInstance().Alert(Lang::Strings::WIFI_CONFIG_MODE(), hint.c_str(), "wificonfig", Lang::Sounds::OGG_TARS_WIFICONFIG());
+#else
         Application::GetInstance().Alert(Lang::Strings::WIFI_CONFIG_MODE(), hint.c_str(), "wificonfig", Lang::Sounds::OGG_WIFICONFIG());
+#endif
     });
 #elif CONFIG_USE_ESP_BLUFI_WIFI_PROVISIONING
     auto &blufi = Blufi::GetInstance();
@@ -196,7 +201,11 @@ void WifiBoard::StartWifiConfigMode() {
         if (display) {
             display->SetEmotion("wificonfig");
         }
+#if CONFIG_BOARD_TYPE_TARS
+        Application::GetInstance().PlaySound(Lang::Sounds::OGG_TARS_WIFICONFIG());
+#else
         Application::GetInstance().PlaySound(Lang::Sounds::OGG_WIFICONFIG());
+#endif
         // 调用板级配网开始回调（如让机器狗坐下）
         Board::GetInstance().OnWifiConfigStart();
     });

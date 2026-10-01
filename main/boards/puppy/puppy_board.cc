@@ -26,8 +26,8 @@
 #include <nvs_flash.h>
 
 #include "esp_lcd_gc9a01.h"
-#include "xgo.h"
-#include "xgo_action.h"
+#include "robot.h"
+#include "robot_action.h"
 #include "imu.h"
 
 #define TAG "PUPPY"
@@ -41,8 +41,8 @@ private:
     Button boot_button_;
     emote::EmoteDisplay* display_ = nullptr;  // AAF动画显示
     Esp32Camera* camera_ = nullptr;  // 初始化为nullptr
-    TaskHandle_t xgo_task_handle_ = nullptr;
-    TaskHandle_t xgo_rx_task_handle_ = nullptr;
+    TaskHandle_t robot_task_handle_ = nullptr;
+    TaskHandle_t motor_rx_task_handle_ = nullptr;
     int64_t button_press_start_time_ = 0;  // 按键按下时间戳
     esp_timer_handle_t long_press_timer_ = nullptr;  // 长按检测定时器
     bool nvs_reset_emotion_shown_ = false;  // 是否已显示 nvs_reset 表情
@@ -57,7 +57,7 @@ private:
         };
         uart_driver_install(UART_NUM_2, 1024, 1024, 0, NULL, 0);
         uart_param_config(UART_NUM_2, &uart_cfg);
-        uart_set_pin(UART_NUM_2, XGO_UART_TX_PIN, XGO_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+        uart_set_pin(UART_NUM_2, MOTOR_UART_TX_PIN, MOTOR_UART_RX_PIN, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     }
 
     void InitializeLaser() {
@@ -282,18 +282,6 @@ private:
             }
             app.ToggleChatState();
         });
-
-        // 双击切换 AEC 开关
-        boot_button_.OnDoubleClick([]() {
-            auto& app = Application::GetInstance();
-            if (app.GetAecMode() == kAecOff) {
-                app.SetAecMode(kAecOnServerSide);
-                app.PlaySound(Lang::Sounds::OGG_OPEN_AEC());
-            } else {
-                app.SetAecMode(kAecOff);
-                app.PlaySound(Lang::Sounds::OGG_CLOSE_AEC());
-            }
-        });
     }
 
     void SetDogSpeed(int dog_vx, int dog_vyaw, int time) {
@@ -301,7 +289,8 @@ private:
         control_mode = 0;
         motor_speed = 0;
         vx = int(2.2 * dog_vx);
-        vyaw = int(2.8 * dog_vyaw);
+        // 底层正 vyaw 实际驱动右转，而工具约定“左转正值”，故取反使转向方向与描述一致（仅影响语音/LLM 路径，不影响蓝牙）
+        vyaw = int(-2.8 * dog_vyaw);
         if (time > 0) {
             vTaskDelay(pdMS_TO_TICKS(time));
         }
@@ -628,64 +617,31 @@ public:
         // 立即读取一次电池电压，避免等待 60 秒才有电量数据
         ReadServoVoltage(1);
         
-        // 注册舵机堵转检测回调
-        SetMotorStallCallback([](uint8_t motor_id) {
-            ESP_LOGW(TAG, "Motor %d stall event triggered!", motor_id);
-            auto& app = Application::GetInstance();
-            
-            // 1. 显示痛苦表情
-            auto display = Board::GetInstance().GetDisplay();
-            if (display) {
-                display->SetEmotion("sad");
-            }
-            
-            // 2. 播放"好疼啊"语音（暂用 exclamation，后续添加 pain.ogg）
-            app.PlaySound(Lang::Sounds::OGG_PAIN());
-            
-            // 3. 卸力堵转的舵机（延迟执行，让语音有机会播放）
-            app.Schedule([motor_id]() {
-                EnableMotor(motor_id, 0);  // 禁用舵机
-                ESP_LOGI(TAG, "Motor %d disabled due to stall", motor_id);
-                
-                // 2秒后重新启用舵机
-                vTaskDelay(pdMS_TO_TICKS(2000));
-                EnableMotor(motor_id, 1);
-                ESP_LOGI(TAG, "Motor %d re-enabled", motor_id);
-                
-                // 恢复表情
-                auto display = Board::GetInstance().GetDisplay();
-                if (display) {
-                    display->SetEmotion("neutral");
-                }
-            });
-        });
-        EnableStallDetection(true);
-        
         InitializeBootButton();
         
         // IMU 初始化
         imu_init();
         
-        // XGO 控制任务
+        // 机器人控制任务
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_control();
-                vTaskDelay(pdMS_TO_TICKS(XGO_TASK_INTERVAL_MS));
+                robot_control();
+                vTaskDelay(pdMS_TO_TICKS(ROBOT_TASK_INTERVAL_MS));
             }
             vTaskDelete(NULL);
-        }, "xgo_task", 4096, this, 5, &xgo_task_handle_, 0);
+        }, "robot_task", 4096, this, 5, &robot_task_handle_, 0);
 
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;
             while (true) {
-                xgo_rx();
+                motor_rx();
                 imu_read_once();
-                vTaskDelay(pdMS_TO_TICKS(XGO_RX_TASK_INTERVAL_MS));
+                vTaskDelay(pdMS_TO_TICKS(MOTOR_RX_TASK_INTERVAL_MS));
             }
             vTaskDelete(NULL);
-        }, "xgo_rx_task", 4096, this, 5, &xgo_rx_task_handle_, 1);
-        ESP_LOGI(TAG, "XGO control tasks created");
+        }, "motor_rx_task", 4096, this, 5, &motor_rx_task_handle_, 1);
+        ESP_LOGI(TAG, "Robot control tasks created");
     }
 
     virtual AudioCodec* GetAudioCodec() override {

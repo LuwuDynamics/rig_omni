@@ -10,7 +10,7 @@ extern "C" {
 /**
  * @brief 初始化并启动 BLE 遥控模式
  * 蓝牙名称与 BluFi 配网保持一致（RIG-PuppyXXXX）
- * 使用与 XGO APP 兼容的 GATT 服务
+ * 使用遥控 APP 兼容的 GATT 服务
  * 
  * @return true 启动成功
  * @return false 启动失败（可能是蓝牙资源已被占用）
@@ -34,7 +34,7 @@ void ble_remote_send(const uint8_t* data, size_t len);
 
 /**
  * @brief 处理从 BLE 接收的数据（APP -> 设备）
- * 内部调用，解析 XGO 协议格式
+ * 内部调用，解析遥控协议格式
  */
 void ble_remote_on_rx(const uint8_t* data, size_t len);
 

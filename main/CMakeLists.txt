@@ -64,7 +64,18 @@ list(APPEND SOURCES
     "boards/common/sy6970.cc"
     "boards/common/system_reset.cc"
 )
-list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/boards/common)
+
+# 按电机 IC 拆分的协议库（EM3 / SCS009 / KP4012）。新电机在 motors/ 下加 <型号>.cc 即可。
+# ESP-IDF evaluates component CMake files once in script mode to discover
+# requirements.  `CONFIGURE_DEPENDS` is not supported in that mode.
+file(GLOB MOTOR_DRIVER_SRCS
+    "${CMAKE_CURRENT_SOURCE_DIR}/boards/common/motors/*.cc"
+)
+list(APPEND SOURCES ${MOTOR_DRIVER_SRCS})
+list(APPEND INCLUDE_DIRS
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/common
+    ${CMAKE_CURRENT_SOURCE_DIR}/boards/common/motors
+)
 
 
 idf_build_get_property(build_components BUILD_COMPONENTS)
@@ -113,14 +124,32 @@ elseif(CONFIG_BOARD_TYPE_HOVER)
     rig_board("hover" "RIG-Hover" "rig-hover")
 elseif(CONFIG_BOARD_TYPE_ARM)
     rig_board("arm" "RIG-Arm" "rig-arm")
-elseif(CONFIG_BOARD_TYPE_BOT)
-    rig_board("bot" "RIG-Bot" "rig-bot")
+elseif(CONFIG_BOARD_TYPE_TARS)
+    set(BOARD_DIR "tars")
+    set(BOARD_TYPE "RIG-Tars")
+    set(PROJECT_BIN_NAME "rig-tars")
+    set(BUILTIN_TEXT_FONT font_puhui_basic_20_4)
+    set(BUILTIN_ICON_FONT font_puhui_basic_20_4)
+    # 使用自定义 EAF 表情
+    set(EMOTE_EXTERNAL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}")
+    # TARS uses a 320x240 landscape panel.  Keep its assets separate from
+    # the round-display boards so changing the TARS interface cannot affect
+    # Puppy, Hover, or Arm.
+    set(EMOTE_RESOLUTION "320_240")
+    # 唤醒词走 ESP-SR WakeNet（Hey Kira，CONFIG_SR_WN_WN9_HEYKIRA_TTS3），
+    # 与其他板共用 staging 打包机制；基础包仍为小路同学，Kira 由 Kconfig 追加。
+    set(WAKENET_MODEL "wn9_xiaolutongxue")
+    set(WAKENET_SRC "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/wakenet/${WAKENET_MODEL}")
+    set(BUILD_CUSTOM_ASSETS TRUE)
+    # 自动收集板子专属音效（.ogg 文件放在 board/ 目录即可）
+    file(GLOB BOARD_OGG_FILES "${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR}/*.ogg")
+    list(APPEND BOARD_EMBED_FILES ${BOARD_OGG_FILES})
 endif()
 
 # 根据板型命名输出文件
 set(CMAKE_PROJECT_NAME "${PROJECT_BIN_NAME}" CACHE STRING "" FORCE)
 
-# 将板型目录加入 include path，让 common/imu.h 能引用板型专属的 xgo.h
+# 将板型目录加入 include path，让 common/imu.h 能引用板型专属的 robot.h
 list(APPEND INCLUDE_DIRS ${CMAKE_CURRENT_SOURCE_DIR}/boards/${BOARD_DIR})
 
 if(MANUFACTURER)
@@ -264,12 +293,20 @@ target_compile_definitions(${COMPONENT_LIB}
                     )
 
 # Add generation rules
+# 音频文件集合决定生成的访问器（OGG_*）。组件需求扫描以 script mode
+# 运行，file(GLOB) 不能使用 CONFIGURE_DEPENDS。
+file(GLOB LANG_SOUND_DEPS
+    "${PROJECT_DIR}/main/assets/locales/*/*.ogg"
+    "${PROJECT_DIR}/main/assets/common/*.ogg"
+    "${PROJECT_DIR}/main/boards/*/*.ogg"
+)
 add_custom_command(
     OUTPUT ${LANG_HEADER}
     COMMAND ${PYTHON} ${PROJECT_DIR}/tools/gen_lang.py
             --output "${LANG_HEADER}"
     DEPENDS
         ${PROJECT_DIR}/tools/gen_lang.py
+        ${LANG_SOUND_DEPS}
     COMMENT "Generating multi-language config"
 )
 
@@ -291,62 +328,76 @@ if(EMOTE_ASSETS_COMPONENT_PATH)
 endif()
 
 # Function to build board custom assets (wakenet + EAF emotes)
-function(build_board_custom_assets)
+function(build_board_custom_assets assets_partition_size)
     set(ASSETS_BIN "${CMAKE_BINARY_DIR}/board_assets.bin")
     set(BUILD_SCRIPT "${PROJECT_DIR}/tools/spiffs_assets/build.py")
     set(EMOTE_FONTS_CBIN "${EMOTE_FONTS_PATH}")
     set(ESP_SR_WAKENET_PATH "${PROJECT_DIR}/managed_components/espressif__esp-sr/model/wakenet_model")
-    
-    # Copy wakenet model from board directory to ESP-SR model directory if not exists
-    set(WAKENET_DST "${ESP_SR_WAKENET_PATH}/${WAKENET_MODEL}")
-    if(EXISTS "${WAKENET_SRC}" AND NOT EXISTS "${WAKENET_DST}")
-        message(STATUS "Copying wakenet model: ${WAKENET_SRC} -> ${WAKENET_DST}")
-        file(COPY "${WAKENET_SRC}" DESTINATION "${ESP_SR_WAKENET_PATH}")
-    endif()
+    set(EMOTE_RES_STAGING "${CMAKE_BINARY_DIR}/emote_res_staging")
     
     # Build arguments for board assets
     set(BUILD_ARGS
         "--text_font" "${EMOTE_FONTS_CBIN}/font_puhui_common_20_4.bin"
-        "--res_path" "${EMOTE_EXTERNAL_PATH}/emoji"
+        "--res_path" "${EMOTE_RES_STAGING}"
         "--target_board" "${EMOTE_EXTERNAL_PATH}/${EMOTE_RESOLUTION}"
+        "--assets_size" "${assets_partition_size}"
     )
     
     # Collect all EAF files as dependencies
     file(GLOB EAF_FILES "${EMOTE_EXTERNAL_PATH}/emoji/*.eaf")
     
-    # Select wificonfig.eaf based on firmware region
+    # The provisioning QR code is region-specific.  This applies to TARS as
+    # well: overseas builds use the global QR EAF, while China builds use the
+    # domestic one.  Both are staged under the stable runtime name
+    # wificonfig.eaf selected by emote.json.
     if(CONFIG_FIRMWARE_REGION_OVERSEAS)
         set(WIFICONFIG_SRC "${EMOTE_EXTERNAL_PATH}/emoji/wificonfig_overseas.eaf")
-        message(STATUS "Overseas firmware: using overseas wificonfig.eaf")
+        message(STATUS "Using overseas wificonfig.eaf")
     else()
         set(WIFICONFIG_SRC "${EMOTE_EXTERNAL_PATH}/emoji/wificonfig_domestic.eaf")
-        message(STATUS "Domestic firmware: using domestic wificonfig.eaf")
+        message(STATUS "Using domestic wificonfig.eaf")
     endif()
     
-    # Create wakenet staging directory with all needed models
-    set(WAKENET_STAGING "${CMAKE_BINARY_DIR}/wakenet_staging")
-    set(WAKENET_STAGING_CMDS
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${WAKENET_STAGING}"
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${WAKENET_STAGING}"
-        # Always include custom wake word model
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${WAKENET_SRC}" "${WAKENET_STAGING}/${WAKENET_MODEL}"
-    )
-    # Include Kconfig-selected models (e.g. Hey Kira for overseas)
-    if(CONFIG_SR_WN_WN9_HEYKIRA_TTS3)
-        set(HEYKIRA_MODEL_DIR "${ESP_SR_WAKENET_PATH}/wn9_heykira_tts3")
-        list(APPEND WAKENET_STAGING_CMDS
-            COMMAND ${CMAKE_COMMAND} -E copy_directory "${HEYKIRA_MODEL_DIR}" "${WAKENET_STAGING}/wn9_heykira_tts3"
+    # Boards using the ESP-SR wake-word path pack those model files into the
+    # assets image. TARS instead reads its TFLite model from the models
+    # partition, so it intentionally skips this staging step.
+    if(NOT DEFINED BUILD_WAKENET_ASSETS OR BUILD_WAKENET_ASSETS)
+        # Copy wakenet model from board directory to ESP-SR model directory if not exists.
+        set(WAKENET_DST "${ESP_SR_WAKENET_PATH}/${WAKENET_MODEL}")
+        if(EXISTS "${WAKENET_SRC}" AND NOT EXISTS "${WAKENET_DST}")
+            message(STATUS "Copying wakenet model: ${WAKENET_SRC} -> ${WAKENET_DST}")
+            file(COPY "${WAKENET_SRC}" DESTINATION "${ESP_SR_WAKENET_PATH}")
+        endif()
+
+        set(WAKENET_STAGING "${CMAKE_BINARY_DIR}/wakenet_staging")
+        set(WAKENET_STAGING_CMDS
+            COMMAND ${CMAKE_COMMAND} -E remove_directory "${WAKENET_STAGING}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${WAKENET_STAGING}"
+            # Always include custom wake word model
+            COMMAND ${CMAKE_COMMAND} -E copy_directory "${WAKENET_SRC}" "${WAKENET_STAGING}/${WAKENET_MODEL}"
         )
-        message(STATUS "Including Hey Kira wake word model in staging")
+        # Include Kconfig-selected models (e.g. Hey Kira for overseas)
+        if(CONFIG_SR_WN_WN9_HEYKIRA_TTS3)
+            set(HEYKIRA_MODEL_DIR "${ESP_SR_WAKENET_PATH}/wn9_heykira_tts3")
+            list(APPEND WAKENET_STAGING_CMDS
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${HEYKIRA_MODEL_DIR}" "${WAKENET_STAGING}/wn9_heykira_tts3"
+            )
+            message(STATUS "Including Hey Kira wake word model in staging")
+        endif()
+        list(APPEND BUILD_ARGS "--wakenet_model" "${WAKENET_STAGING}")
     endif()
-    list(APPEND BUILD_ARGS "--wakenet_model" "${WAKENET_STAGING}")
     
     # Create custom command to build board assets
     add_custom_command(
         OUTPUT ${ASSETS_BIN}
         COMMAND ${CMAKE_COMMAND} -E echo "Building board custom assets..."
         ${WAKENET_STAGING_CMDS}
-        COMMAND ${CMAKE_COMMAND} -E copy "${WIFICONFIG_SRC}" "${EMOTE_EXTERNAL_PATH}/emoji/wificonfig.eaf"
+        # Stage emote resources per build so domestic/international packaging
+        # never rewrites generated files in the board source directory.
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${EMOTE_RES_STAGING}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${EMOTE_RES_STAGING}"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${EMOTE_EXTERNAL_PATH}/emoji" "${EMOTE_RES_STAGING}"
+        COMMAND ${CMAKE_COMMAND} -E copy "${WIFICONFIG_SRC}" "${EMOTE_RES_STAGING}/wificonfig.eaf"
         COMMAND ${PYTHON} ${BUILD_SCRIPT} ${BUILD_ARGS}
         COMMAND ${CMAKE_COMMAND} -E copy "${PROJECT_DIR}/tools/spiffs_assets/build/assets.bin" "${ASSETS_BIN}"
         DEPENDS
@@ -484,7 +535,7 @@ partition_table_get_partition_info(offset "--partition-name assets" "offset")
 if ("${size}" AND "${offset}")
     # Auto build custom assets with wakenet + EAF emotes
     if(BUILD_CUSTOM_ASSETS)
-        build_board_custom_assets()
+        build_board_custom_assets("${size}")
         # Use the generated assets.bin from build directory
         esptool_py_flash_to_partition(flash "assets" "${ASSETS_LOCAL_FILE}")
         add_dependencies(flash board_custom_assets)

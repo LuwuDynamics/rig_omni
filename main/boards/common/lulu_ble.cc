@@ -14,11 +14,11 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
-#include "xgo.h"
+#include "robot.h"
 
 static const char *TAG = "LuluBle";
 
-// 使用与 XGO 相同的 UUID（16-bit 形式）
+// 遥控 GATT UUID（16-bit 形式）
 // Service: 0xFFF0, RX(Notify): 0xFFF1, TX(Write): 0xFFF2
 static const ble_uuid16_t LULU_SERVICE_UUID  = BLE_UUID16_INIT(0xFFF0);
 static const ble_uuid16_t LULU_CHAR_RX_UUID  = BLE_UUID16_INIT(0xFFF1); // 设备 -> APP (Notify)

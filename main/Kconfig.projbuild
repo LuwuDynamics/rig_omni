@@ -70,15 +70,15 @@ choice BOARD_TYPE
     config BOARD_TYPE_ARM
         bool "RIG-Arm"
         depends on IDF_TARGET_ESP32S3
-    config BOARD_TYPE_BOT
-        bool "RIG-Bot"
+    config BOARD_TYPE_TARS
+        bool "RIG-Tars"
         depends on IDF_TARGET_ESP32S3
 endchoice
 
 config PUPPY_ENABLE_BLE_CONTROL
     bool "Enable BLE Control for Puppy/Hover/Arm Robot (XGO APP compatible)"
     default n
-    depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_BOT
+    depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_TARS
     select BT_ENABLED
     select BT_NIMBLE_ENABLED
     help
@@ -88,19 +88,25 @@ config PUPPY_ENABLE_BLE_CONTROL
 
 choice DISPLAY_STYLE
     prompt "Select display style"
+    # RIG boards instantiate EmoteDisplay and package EAF assets.  Selecting
+    # an LVGL message style makes Assets choose the incompatible LVGL loader,
+    # so animations such as wificonfig are never registered.
+    default USE_EMOTE_MESSAGE_STYLE if BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_TARS
     default USE_DEFAULT_MESSAGE_STYLE
     help
         Select display style for RIG-Omni device
 
     config USE_DEFAULT_MESSAGE_STYLE
         bool "Enable default message style"
+        depends on !BOARD_TYPE_PUPPY && !BOARD_TYPE_HOVER && !BOARD_TYPE_ARM && !BOARD_TYPE_TARS
 
     config USE_WECHAT_MESSAGE_STYLE
         bool "Enable WeChat Message Style"
+        depends on !BOARD_TYPE_PUPPY && !BOARD_TYPE_HOVER && !BOARD_TYPE_ARM && !BOARD_TYPE_TARS
 
     config USE_EMOTE_MESSAGE_STYLE
         bool "Emote animation style"
-        depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_BOT
+        depends on BOARD_TYPE_PUPPY || BOARD_TYPE_HOVER || BOARD_TYPE_ARM || BOARD_TYPE_TARS
 endchoice
 
 config USE_MULTILINE_CHAT_MESSAGE

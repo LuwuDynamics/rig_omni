@@ -2,7 +2,7 @@
 
 An Open-Source ESP32-S3 Firmware for Multipurpose Intelligent Robots
 
-ESP32-S3 · Voice AI · EAF Animation · MCP Remote Control · Multi-Bot Architecture
+ESP32-S3 · Voice AI · Robot Motion · EAF Animation · TARS Console · MCP Tools
 
 📖 [中文文档](README_CN.md)
 
@@ -17,6 +17,7 @@ ESP32-S3 · Voice AI · EAF Animation · MCP Remote Control · Multi-Bot Archite
 - [Quick Start](#-quick-start)
 - [Project Structure](#-project-structure)
 - [Multi-Board Configuration](#-multi-board-configuration)
+- [TARS Console and Controls](#tars-console-and-controls)
 - [Development](#-development)
 - [Contributing](#-contributing)
 - [License](#-license)
@@ -25,9 +26,9 @@ ESP32-S3 · Voice AI · EAF Animation · MCP Remote Control · Multi-Bot Archite
 
 ## 📖 Overview
 
-RIG-Omni is an open-source embedded firmware for ESP32-S3 powered intelligent robots. It drives multiple robot forms — from a 5-servo robot dog (Puppy) to a 2-wheel hovercraft (Hover) — all from a single unified codebase.
+RIG-Omni is open-source ESP32-S3 firmware for four robot forms: **Puppy**, a five-servo robot dog; **Hover**, a two-wheel balancing robot; **ARM**, a robotic arm; and **TARS**, an *Interstellar*-inspired walking robot with a landscape console display.
 
-Powered by a modular "one common core, per-form specialization" architecture, RIG-Omni delivers voice AI interaction, EAF-based emotion animations, IMU sensor fusion, MCP remote control tools, and more — all running on a single ESP32-S3 chip with a 240×240 round LCD.
+The robots share voice interaction, networking, sensor drivers, and MCP tools, while each board provides its own motion control and interface. Puppy, Hover, and ARM use a 240×240 round display; TARS uses a 320×240 landscape display for logs and telemetry. Wake-word detection runs locally; conversational recognition and speech generation use network services.
 
 > Mission: Give every robot builder an intuitive, modular, and delightful firmware experience.
 
@@ -38,13 +39,14 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 | Category | Capability |
 | --- | --- |
 | 🧠 Voice AI | Offline wake word, cloud ASR/TTS, VAD, AGC |
-| 🎭 Emotion Display | EAF animation engine (LVGL), 20+ expressions, dynamic transitions |
-| 🤖 Motion Control | Multi-servo & wheel motor control, IMU-based balance, preset actions |
+| 🎭 Display | EAF expressions on round displays; a dedicated dual-column TARS console |
+| 🤖 Motion Control | Servo gait, wheel balance, Hover gimbal mode, ARM calibration and teach mode |
 | 📡 Connectivity | BluFi WiFi provisioning, OTA firmware update, HMAC device activation |
-| 🔧 MCP Tools | Extensible tool framework for remote robot commands |
-| 📷 Camera | ESP32-S3 camera integration with snapshot capabilities |
-| 🎮 Remote Control | Bluetooth Low Energy (BLE) gamepad support |
+| 🔧 MCP Tools | Voice-callable movement, calibration, status, and TARS personality controls |
+| 📷 Camera | Snapshot tools on camera-equipped hardware |
+| 🎮 Remote Control | BLE control compatible with the robot remote app / mini program |
 | 🖥️ Debug | Real-time hover debug web server for motor tuning |
+| 📦 Build Tools | Per-board versions, regional asset packaging, and TARS voice generation |
 
 ---
 
@@ -52,15 +54,15 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 
 | # | Component | Interface | Details |
 | --- | --- | --- | --- |
-| 1 | GC9A01 Round LCD (240×240) | SPI | EAF emotion animations via LVGL |
+| 1 | GC9A01 round LCD / ST7789V2 landscape LCD | SPI | 240×240 for Puppy/Hover/ARM; 320×240 for TARS |
 | 2 | IMU (QMI8658C) | I2C | 6-axis attitude + balance control |
-| 3 | Servo Motors (Puppy: 5, Hover: 1) | UART (XGO Protocol) | Bidirectional position + speed control |
-| 4 | Brushless Serial Motors (Hover: 2 wheels) | UART (XGO Protocol) | Differential drive |
+| 3 | Serial servos | UART | EM3 for Puppy/Hover; SCS009 for ARM/TARS |
+| 4 | KP4012 wheel motors (Hover: 2) | UART | Balance, differential drive, and gimbal control |
 | 5 | I2S Audio (Direct) | I2S | Simplex/Duplex mic + speaker (no hardware codec chip) |
 | 6 | Camera (GC0308/OV2640) | DVP | Snapshot via MCP tools |
-| 7 | Boot + Touch Button | GPIO | WiFi config, chat toggle, NVS reset (Touch on Hover & ARM) |
+| 7 | Boot button + external touch module | GPIO | Functions depend on the board; TARS uses an active-low digital touch input on GPIO3 |
 
-> All boards share the same ESP32-S3 core with GC9A01 display. Per-form motor configurations are isolated in their respective board directories.
+> Pin assignments and display orientation are defined in `main/boards/common/config.h` and each board's `board_config.h`. Use the configuration for your hardware revision.
 
 ---
 
@@ -68,10 +70,10 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 
 | Layer | Components | Technology |
 | --- | --- | --- |
-| **Application** | Voice AI · Emote Display · MCP Server · Camera Tools | C++ (ESP-IDF) |
-| **Board Abstraction** | `boards/common/` — IMU · Button · BLE · Battery · Camera | C++ shared drivers |
-| **Robot Logic** | `boards/puppy/` (5-Servo Dog) · `boards/hover/` (1-Servo + 2-Wheel Hover) · `boards/arm/` (Multi-Servo Arm) | Per-board C++ |
-| **Platform** | WiFi · Bluetooth · SPI · I2C · I2S · UART · GPIO | ESP-IDF v5.5+ |
+| **Application** | Voice AI · Emote/TARS display · MCP server · Camera tools | C++ (ESP-IDF) |
+| **Shared Drivers** | `main/boards/common/` — IMU · Button · BLE · Battery · Camera · Motor protocols | C++ shared drivers |
+| **Robot Logic** | `main/boards/{puppy,hover,arm,tars}/` — board setup, robot control, actions, and motors | Per-board C++ |
+| **Platform** | WiFi · Bluetooth · SPI · I2C · I2S · UART · GPIO | ESP-IDF 5.5.x |
 
 ---
 
@@ -79,15 +81,16 @@ Powered by a modular "one common core, per-form specialization" architecture, RI
 
 ### Prerequisites
 
-- ESP32-S3 board with GC9A01 240×240 LCD
-- ESP-IDF v5.5.2+
-- Python 3.8+ (for build scripts)
+- Matching ESP32-S3 robot hardware with 16 MB flash, PSRAM, and the board-specific display
+- ESP-IDF 5.5.x; TARS builds have been verified with 5.5.3
+- Python 3.10+ for utility scripts; use the Python environment installed by ESP-IDF for firmware builds
+- FFmpeg if generating or resampling voice assets
 
 ### Build
 
 ```bash
 # Clone and enter
-git clone git@github.com:Xgorobot/RIG-Omni.git
+git clone https://github.com/LuwuDynamics/rig_omni.git RIG-Omni
 cd RIG-Omni
 
 # Source ESP-IDF environment
@@ -96,21 +99,39 @@ source ~/esp/esp-idf/export.sh
 # Select board type and firmware region (interactive menu)
 idf.py set-target esp32s3
 idf.py menuconfig
-# → RIG-Omni → Board Type → Puppy / Hover / ARM
+# → RIG-Omni → Board Type → RIG-Puppy / RIG-Hover / RIG-Arm / RIG-Tars
 # → RIG-Omni → Firmware Region → Domestic (China) / Overseas
+# → RIG-Omni → Select display style → Emote animation style
+# → RIG-Omni → Flash Assets → Flash Emote Assets
 
 # Build & Flash
 idf.py build
 idf.py -p /dev/ttyUSB0 flash monitor
 ```
 
+Replace `/dev/ttyUSB0` with your serial port (for example, `/dev/cu.usbmodem…` on macOS). Select the firmware region before building so the provisioning QR code matches the network service you intend to use.
+
+`idf.py build` builds the application and selected board assets. `idf.py flash` writes the configured images. For a fresh device or a board/region change, flash the matching application and assets together. Changing a board-specific `.ogg` updates the application binary; changing EAF animations or packaged wake-word models updates the assets image.
+
+Versions are maintained in `main/boards/<board>/version.txt`. Check `build/project_description.json` for the version used by a particular build.
+
 ### Production Release
 
 ```bash
-# Build a release package (firmware + assets + manifest)
-python tools/gen_bin_package.py
-# Output: bin/rig-puppy.bin (or rig-hover.bin)
+# Inspect the packaging selection without building
+python3 tools/package_luwu_firmware.py --board tars --dry-run
+
+# Build domestic, overseas, and hardware-test packages
+python3 tools/package_luwu_firmware.py --board tars
+# Multiple boards: --board puppy,hover,arm,tars
+# Interactive selection: omit --board
 ```
+
+The packaging script also builds the separate hardware-test project, which must be present as `Test_Firmware/` or `test_firmware/`. If you only need the robot firmware, use the `idf.py` workflow above.
+
+Packages are written to `releases/Luwu-Tools/bin/`: `RIG/<board>/` for domestic firmware, `RIG/<board>/gb/` for overseas firmware, and `GARAGE/<board>/` for hardware tests. Regional builds use isolated directories under `build/packages/`; logs are saved in `releases/logs/`. Each main-firmware package includes full, application-only, and assets-only manifests.
+
+TARS regional builds share the same dedicated English voice prompts. Region selection controls network endpoints, the default interface language, and the provisioning QR code.
 
 ---
 
@@ -125,18 +146,22 @@ RIG-Omni/
 │   ├── protocols/           # MQTT & WebSocket communication
 │   ├── boards/              # Hardware abstraction layer
 │   │   ├── common/          # Shared drivers (IMU, button, BLE, camera…)
+│   │   │   └── motors/     # EM3, SCS009, KP4012, shared SCS bus
 │   │   ├── puppy/           # Puppy robot (5-servo dog)
-│   │   ├── hover/           # Hover robot (2-wheel hovercraft)
-│   │   └── arm/             # ARM robot (multi-servo robotic arm)
+│   │   ├── hover/           # Two-wheel balance and gimbal modes
+│   │   ├── arm/             # Five-servo robotic arm
+│   │   └── tars/            # Three-servo robot, console, voice assets
 │   ├── assets/              # Language packs, fonts
 │   ├── application.cc/h     # Application lifecycle
 │   ├── mcp_server.cc/h      # MCP remote control server
 │   ├── ota.cc/h             # OTA firmware update
 │   └── settings.cc/h        # Device settings (NVS)
 ├── partitions/              # Flash partition table
-│   └── 16m.csv              # 16MB single partition scheme
+│   └── 16m.csv              # 16 MB flash: two OTA slots + assets
 ├── tools/                   # Build & utility scripts
 │   ├── gen_lang.py          # Language config generation
+│   ├── package_luwu_firmware.py  # Multi-board regional release packages
+│   ├── generate_tars_voice_pack.py  # Volcengine voice generation
 │   ├── build_default_assets.py  # Default asset builder
 │   └── spiffs_assets/       # SPIFFS asset packer
 ├── CMakeLists.txt           # Root CMake (ESP-IDF project)
@@ -157,17 +182,42 @@ idf.py menuconfig
 
 | Board | Motors | Motion | Key Files |
 | --- | --- | --- | --- |
-| **RIG-Puppy** | 5 servos | Dog gait, head tracking, actions | `boards/puppy/puppy_board.cc` |
-| **RIG-Hover** | 1 servo + 2 FOC motors | Balance, wheel drive, differential | `boards/hover/hover_board.cc` |
-| **RIG-ARM** | Multi-servo (AX-12A) | Robotic arm, calibration, teach mode | `boards/arm/arm_board.cc` |
+| **RIG-Puppy** | 5 EM3 servos | Dog gait, head tracking, actions | `main/boards/puppy/puppy_board.cc` |
+| **RIG-Hover** | 1 EM3 servo + 2 KP4012 wheels | Balance, differential drive, gimbal mode | `main/boards/hover/hover_board.cc` |
+| **RIG-ARM** | 5 SCS009 servos | Robotic arm, calibration, teach mode | `main/boards/arm/arm_board.cc` |
+| **RIG-TARS** | 3 SCS009 servos | Walking, turning, calibration, live telemetry | `main/boards/tars/tars_board.cc` |
 
 Each board has its own:
-- Motor control logic (`xgo.cc/h`, `xgo_action.cc/h`)
-- EAF emotion assets (`emoji/`, `240_240/`)
+
+- Board setup (`<board>_board.cc`) and pin definitions (`board_config.h`)
+- Motion logic (`robot.cc/h`, `robot_action.cc/h`) and motor adapter (`motor.cc/h`)
+- Display assets (`emoji/`, `240_240/`; TARS uses `320_240/`)
 - Wake word model (`wakenet/`)
 - Debug tools (`hover_debug_server.cc/h` for Hover)
 
-All hardware drivers (IMU, Bluetooth, buttons, camera, battery) live in `boards/common/` and are shared across all forms.
+Shared drivers live in `main/boards/common/`. The `motors/` subdirectory contains EM3, SCS009, KP4012, and SCS bus implementations; each board's motor adapter handles its own motor IDs and configuration.
+
+### TARS Console and Controls
+
+TARS uses a **320×240 ST7789V2 landscape LCD** with an *Interstellar*-inspired terminal layout:
+
+- **Left:** dense blue, 6 px scrolling log text.
+- **Right:** green, 8 px status text for the current conversation state, servo angles, IMU attitude, and battery telemetry, refreshed once per second.
+- **Footer:** bold 12 px `HONESTY` and `HUMOR` percentages, separated from the logs by a horizontal line. Defaults are **90% honesty** and **75% humor**; the `self.tars.set_personality` MCP tool changes them through conversation.
+- **Wi-Fi setup:** a region-specific QR animation temporarily replaces the console to keep the code unobstructed.
+
+The external touch module uses **GPIO3, active low**. During calibration, a short touch confirms the current servo zero positions and exits calibration. During normal operation, hold for at least **3 seconds**, then release to enter deep sleep; a short touch wakes the robot. A short touch outside calibration has no assigned action.
+
+TARS voice prompts live in `main/boards/tars/tars_*.ogg`. To generate selected replacements with your own Volcengine voice:
+
+```bash
+export VOLC_TTS_SPEAKER='your-speaker-id'
+# Set VOLC_SPEECH_API_KEY in your local environment.
+python3 tools/generate_tars_voice_pack.py --only message_send,over --dry-run
+python3 tools/generate_tars_voice_pack.py --only message_send,over --overwrite
+```
+
+Generated audio is saved under `tools/tars_voice_output/` for review. After listening, replace the corresponding board-specific files and rebuild; the script does not install the audio into the firmware automatically. FFmpeg normalizes non-16 kHz output to Ogg Opus with a 16 kHz input-rate header. `ffprobe` may report 48 kHz for an Opus stream because that is its decoding rate.
 
 ### Firmware Region (Domestic / Overseas)
 
@@ -182,16 +232,18 @@ idf.py menuconfig
 | --- | --- | --- |
 | OTA URL | `xl-api.xgorobot.com` | `xl-api.luwudynamics.ai` |
 | Default Language | zh_CN | en_US |
-| Wake Word | Custom (e.g. 小陆同学) | Custom + Hey Kira |
+| Wake Word | Board models and active ESP-SR settings | Board models + Hey Kira |
 | WiFi Config Animation | Domestic QR code | Overseas QR code |
 
 The region selection automatically configures:
+
 - **OTA URL** — different server endpoints for firmware updates and server address discovery
 - **Default Language** — `zh_CN` for domestic, `en_US` for overseas (users can still switch via MCP)
-- **Wake Word** — overseas auto-enables ESP-SR built-in "Hey Kira" alongside the custom wake word
+- **Wake Word** — overseas enables ESP-SR's built-in "Hey Kira"; packaged models also depend on the board and active ESP-SR configuration
 - **WiFi Config EAF** — different `wificonfig.eaf` animation (with region-specific QR code) is selected at build time
 
 The `wificonfig.eaf` file is auto-generated during build. Each board keeps two source files:
+
 ```
 main/boards/<board>/emoji/
     wificonfig_domestic.eaf    # Domestic QR code
@@ -210,10 +262,12 @@ main/boards/<board>/emoji/
 mkdir -p main/boards/myrobot/240_240
 mkdir -p main/boards/myrobot/emoji
 
-# 2. Add board.cc + xgo.cc with your motor logic
+# 2. Add board setup, robot.cc, robot_action.cc, and motor.cc
 # 3. Register in Kconfig (main/Kconfig.projbuild)
 # 4. Add to CMakeLists.txt build config
 ```
+
+Use `main/boards/common/motors/` for shared motor protocol code and keep board-specific pin assignments in `board_config.h`. After adding or removing audio files, run `idf.py reconfigure` before rebuilding so the embedded resource list is refreshed.
 
 ### MCP Tools
 

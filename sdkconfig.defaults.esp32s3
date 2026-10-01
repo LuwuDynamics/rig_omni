@@ -21,7 +21,9 @@ CONFIG_MBEDTLS_DYNAMIC_FREE_CONFIG_DATA=y
 CONFIG_ESP32S3_INSTRUCTION_CACHE_32KB=y
 CONFIG_ESP32S3_DATA_CACHE_LINE_64B=y
 
-CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=y
+# Wake word: Hey Kira（海外版唤醒词，模型在 esp-sr 组件 wn9_heykira_tts3，
+# 由 main/CMakeLists.txt 的 staging 逻辑打进 assets 镜像）
+CONFIG_SR_WN_WN9_HEYKIRA_TTS3=y
 # OTA URL auto-selected by FIRMWARE_REGION in ota.cc (no longer in Kconfig)
 
 CONFIG_ESP_SYSTEM_EVENT_TASK_STACK_SIZE=4096

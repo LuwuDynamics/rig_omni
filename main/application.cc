@@ -20,6 +20,14 @@
 
 #define TAG "Application"
 
+#if CONFIG_BOARD_TYPE_TARS
+// TARS carries its own cloned voice pack.  Keep the common locale prompts for
+// every other board, but never fall back to zh-CN prompts in a TARS build.
+#define BOARD_SOUND(TARS_SUFFIX, DEFAULT_SUFFIX) Lang::Sounds::OGG_TARS_##TARS_SUFFIX()
+#else
+#define BOARD_SOUND(TARS_SUFFIX, DEFAULT_SUFFIX) Lang::Sounds::OGG_##DEFAULT_SUFFIX()
+#endif
+
 
 PowerSaveLevel Application::GetUserPowerSaveLevel() {
     Settings settings("wifi", false);
@@ -178,13 +186,13 @@ void Application::Initialize() {
                 display->SetStatus(Lang::Strings::DETECTING_MODULE());
                 break;
             case NetworkEvent::ModemErrorNoSim:
-                Alert(Lang::Strings::ERROR(), Lang::Strings::PIN_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
+                Alert(Lang::Strings::ERROR(), Lang::Strings::PIN_ERROR(), "triangle_exclamation", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
                 break;
             case NetworkEvent::ModemErrorRegDenied:
-                Alert(Lang::Strings::ERROR(), Lang::Strings::REG_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
+                Alert(Lang::Strings::ERROR(), Lang::Strings::REG_ERROR(), "triangle_exclamation", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
                 break;
             case NetworkEvent::ModemErrorInitFailed:
-                Alert(Lang::Strings::ERROR(), Lang::Strings::MODEM_INIT_ERROR(), "triangle_exclamation", Lang::Sounds::OGG_EXCLAMATION());
+                Alert(Lang::Strings::ERROR(), Lang::Strings::MODEM_INIT_ERROR(), "triangle_exclamation", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
                 break;
             case NetworkEvent::ModemErrorTimeout:
                 display->SetStatus(Lang::Strings::REGISTERING_NETWORK());
@@ -223,7 +231,7 @@ void Application::Run() {
 
         if (bits & MAIN_EVENT_ERROR) {
             SetDeviceState(kDeviceStateIdle);
-            Alert(Lang::Strings::ERROR(), last_error_message_.c_str(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
+            Alert(Lang::Strings::ERROR(), last_error_message_.c_str(), "circle_xmark", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
         }
 
         if (bits & MAIN_EVENT_NETWORK_CONNECTED) {
@@ -400,7 +408,7 @@ void Application::CheckAssetsVersion() {
 
         char message[256];
         snprintf(message, sizeof(message), Lang::Strings::FOUND_NEW_ASSETS(), download_url.c_str());
-        Alert(Lang::Strings::LOADING_ASSETS(), message, "cloud_arrow_down", Lang::Sounds::OGG_UPGRADE());
+        Alert(Lang::Strings::LOADING_ASSETS(), message, "cloud_arrow_down", BOARD_SOUND(UPGRADE, UPGRADE));
         
         // Wait for the audio service to be idle for 3 seconds
         vTaskDelay(pdMS_TO_TICKS(3000));
@@ -420,7 +428,7 @@ void Application::CheckAssetsVersion() {
         vTaskDelay(pdMS_TO_TICKS(1000));
 
         if (!success) {
-            Alert(Lang::Strings::ERROR(), Lang::Strings::DOWNLOAD_ASSETS_FAILED(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
+            Alert(Lang::Strings::ERROR(), Lang::Strings::DOWNLOAD_ASSETS_FAILED(), "circle_xmark", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
             vTaskDelay(pdMS_TO_TICKS(2000));
             SetDeviceState(kDeviceStateActivating);
             return;
@@ -455,7 +463,7 @@ void Application::CheckNewVersion() {
             snprintf(error_message, sizeof(error_message), "code=%d, url=%s", err, ota_->GetCheckVersionUrl().c_str());
             char buffer[256];
             snprintf(buffer, sizeof(buffer), Lang::Strings::CHECK_NEW_VERSION_FAILED(), retry_delay, error_message);
-            Alert(Lang::Strings::ERROR(), buffer, "cloud_slash", Lang::Sounds::OGG_EXCLAMATION());
+            Alert(Lang::Strings::ERROR(), buffer, "cloud_slash", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
 
             ESP_LOGW(TAG, "Check new version failed, retry in %d seconds (%d/%d)", retry_delay, retry_count, MAX_RETRY);
             for (int i = 0; i < retry_delay; i++) {
@@ -477,7 +485,7 @@ void Application::CheckNewVersion() {
             display->SetEmotion("wificonfig");
             
             // 播报激活语音
-            audio_service_.PlaySound(Lang::Sounds::OGG_ACTIVATION());
+            audio_service_.PlaySound(BOARD_SOUND(ACTIVATION, ACTIVATION));
             
             // 设备未激活，清除WiFi信息后重启（与长按按键逻辑一致）
             ESP_LOGW(TAG, "Device not activated, clearing WiFi credentials and restarting...");
@@ -577,7 +585,7 @@ void Application::InitializeProtocol() {
                     if (GetDeviceState() == kDeviceStateSpeaking) {
                         // 机器说完话，播放结束音效（打断模式下不播放，避免干扰）
                         if (GetAecMode() == kAecOff) {
-                            audio_service_.PlaySound(Lang::Sounds::OGG_OVER());
+                            audio_service_.PlaySound(BOARD_SOUND(OVER, OVER));
                         }
                         if (listening_mode_ == kListeningModeManualStop) {
                             SetDeviceState(kDeviceStateIdle);
@@ -603,7 +611,7 @@ void Application::InitializeProtocol() {
                     display->SetChatMessage("user", message.c_str());
                     // 人说完话，播放发送音效（打断模式下不播放，避免干扰）
                     if (GetAecMode() == kAecOff) {
-                        audio_service_.PlaySound(Lang::Sounds::OGG_MESSAGE_SEND());
+                        audio_service_.PlaySound(BOARD_SOUND(MESSAGE_SEND, MESSAGE_SEND));
                     }
                     // 收到 STT 识别结果，切换到思考状态
                     if (GetDeviceState() == kDeviceStateListening) {
@@ -642,7 +650,7 @@ void Application::InitializeProtocol() {
             auto message = cJSON_GetObjectItem(root, "message");
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(status) && cJSON_IsString(message) && cJSON_IsString(emotion)) {
-                Alert(status->valuestring, message->valuestring, emotion->valuestring, Lang::Sounds::OGG_VIBRATION());
+                Alert(status->valuestring, message->valuestring, emotion->valuestring, BOARD_SOUND(VIBRATION, VIBRATION));
             } else {
                 ESP_LOGW(TAG, "Alert command requires status, message and emotion");
             }
@@ -821,7 +829,7 @@ void Application::HandleWakeWordDetectedEvent() {
         if (state == kDeviceStateListening) {
             protocol_->SendStartListening(GetDefaultListeningMode());
             audio_service_.ResetDecoder();
-            audio_service_.PlaySound(Lang::Sounds::OGG_POPUP());
+            audio_service_.PlaySound(BOARD_SOUND(POPUP, POPUP));
             // Re-enable wake word detection as it was stopped by the detection itself
             audio_service_.EnableWakeWordDetection(true);
         } else {
@@ -921,7 +929,12 @@ void Application::HandleStateChangedEvent() {
             // Play hi sound after ResetDecoder (in EnableVoiceProcessing) has been called
             if (play_popup_on_listening_) {
                 play_popup_on_listening_ = false;
+#if CONFIG_BOARD_TYPE_TARS
+                // TARS 专属唤醒应答（boards/tars/tars_hi.ogg），替代通用 hi 音
+                audio_service_.PlaySound(Lang::Sounds::OGG_TARS_HI());
+#else
                 audio_service_.PlaySound(Lang::Sounds::OGG_HI());
+#endif
             }
             break;
         case kDeviceStateSpeaking:
@@ -1010,7 +1023,7 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
     }
     ESP_LOGI(TAG, "Starting firmware upgrade from URL: %s", upgrade_url.c_str());
 
-    Alert(Lang::Strings::OTA_UPGRADE(), Lang::Strings::UPGRADING(), "download", Lang::Sounds::OGG_UPGRADE());
+    Alert(Lang::Strings::OTA_UPGRADE(), Lang::Strings::UPGRADING(), "download", BOARD_SOUND(UPGRADE, UPGRADE));
     vTaskDelay(pdMS_TO_TICKS(3000));
 
     SetDeviceState(kDeviceStateUpgrading);
@@ -1035,7 +1048,7 @@ bool Application::UpgradeFirmware(const std::string& url, const std::string& ver
         ESP_LOGE(TAG, "Firmware upgrade failed, restarting audio service and continuing operation...");
         audio_service_.Start(); // Restart audio service
         board.SetPowerSaveLevel(GetUserPowerSaveLevel()); // Restore power save level
-        Alert(Lang::Strings::ERROR(), Lang::Strings::UPGRADE_FAILED(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION());
+        Alert(Lang::Strings::ERROR(), Lang::Strings::UPGRADE_FAILED(), "circle_xmark", BOARD_SOUND(EXCLAMATION, EXCLAMATION));
         vTaskDelay(pdMS_TO_TICKS(3000));
         return false;
     } else {
@@ -1163,4 +1176,3 @@ void Application::ResetProtocolSync() {
     }
     protocol_.reset();
 }
-

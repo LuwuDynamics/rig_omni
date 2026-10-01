@@ -1,7 +1,7 @@
 /**
  * BLE 遥控控制模块
  * 提供与小程序/APP的蓝牙遥控通信
- * 协议兼容 XGO APP
+ * 协议兼容遥控 APP
  */
 
 #include "sdkconfig.h"
@@ -26,15 +26,15 @@
 #include "services/gap/ble_svc_gap.h"
 #include "services/gatt/ble_svc_gatt.h"
 
-#include "xgo.h"
-#include "xgo_action.h"
+#include "robot.h"
+#include "robot_action.h"
 
 static const char* TAG = "BleRemote";
 
 // 蓝牙名称前缀（与 BluFi 保持一致）
 #define BLE_DEVICE_NAME_PREFIX "RIG-Arm"
 
-// GATT 服务 UUID（与 XGO 兼容）
+// GATT 服务 UUID（遥控协议）
 // Service: 0xFFF0, RX(Notify): 0xFFF1, TX(Write): 0xFFF2
 static const ble_uuid16_t REMOTE_SERVICE_UUID = BLE_UUID16_INIT(0xFFF0);
 static const ble_uuid16_t REMOTE_CHAR_RX_UUID = BLE_UUID16_INIT(0xFFF1);  // 设备 -> APP (Notify)
@@ -56,7 +56,7 @@ static void ble_remote_host_task(void* param);
 
 /**
  * @brief 从协议值范围转换到实际值范围
- * XGO 协议: 0x00-0xFF 对应 min-max
+ * 遥控协议: 0x00-0xFF 对应 min-max
  */
 static int from_order_range(uint8_t value, int min_val, int max_val) {
     return min_val + (max_val - min_val) * value / 255;
@@ -351,7 +351,7 @@ extern "C" void ble_remote_send(const uint8_t* data, size_t len) {
 
 /**
  * @brief 处理接收到的 BLE 数据
- * 协议格式与 XGO 一致：55 00 LENGTH ORDER PAYLOAD... CHECKSUM 00 AA
+ * 遥控协议格式：55 00 LENGTH ORDER PAYLOAD... CHECKSUM 00 AA
  */
 extern "C" void ble_remote_on_rx(const uint8_t* data, size_t len) {
     if (!data || len < 7) {

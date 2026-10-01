@@ -3,5 +3,5 @@
     "display": true,
     "camera": true,
     "psram": true,
-    "description": "LuLu Robot ESP32S3 - XGO Robot Arm with GC9A01 240x240 Round Display"
+    "description": "LuLu Robot ESP32S3 - RIG Robot Arm with GC9A01 240x240 Round Display"
 }
