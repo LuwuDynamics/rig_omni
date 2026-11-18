@@ -39,26 +39,29 @@ int16_t scs_load_be16(uint8_t hi, uint8_t lo) {
 
 /* 与 Hover 轮速 lp_vel 同级：新采样权重约 15% */
 static const float k_voltage_ema_alpha = 0.85f;
+static uint8_t s_voltage_read_id = 0;
 
-bool scs_decode_voltage(const uint8_t *frame, uint8_t length_field, float *volts) {
-    if (frame == nullptr || volts == nullptr) {
+void scs_arm_voltage_read(uint8_t id) {
+    s_voltage_read_id = id;
+}
+
+bool scs_decode_voltage(uint8_t id, const uint8_t *frame, uint8_t length_field, float *volts) {
+    if (frame == nullptr || volts == nullptr || s_voltage_read_id == 0 || id != s_voltage_read_id) {
         return false;
     }
-    /* Feetech 读 1 字节：应答 LEN 多为 0x02（状态+数据），数据在 frame[5]。
-     * 少数型号 LEN==0x03 时 frame[5] 仍为电压，frame[6] 可能为地址回显。
-     * 从 0x48 连续读 8 字节时 LEN==0x09，电压在数据区偏移 6（地址 0x4E）。 */
-    uint8_t raw = 0;
-    if (length_field == 2 || length_field == 3) {
-        raw = frame[5];
-    } else if (length_field >= 9) {
-        raw = frame[11];
-    } else {
+    /* READ 1 byte @0x40 → LEN 2（ERR + 电压）或 3 */
+    if (length_field != 2 && length_field != 3) {
         return false;
     }
-    if (length_field == 3 && raw == 0 && frame[6] != 0) {
-        raw = frame[6];
+    if (frame[4] != 0) {
+        return false;
     }
+    const uint8_t raw = frame[5];
     const float sample = raw * 0.1f;
+    if (sample < 4.5f || sample > 10.0f) {
+        return false;
+    }
+    s_voltage_read_id = 0;
     if (*volts < 0.1f) {
         *volts = sample;
     } else {
@@ -166,8 +169,8 @@ void scs_bus_poll(TickType_t timeout_ticks) {
                 rx_flag = 3;
                 break;
             case 3:
-                if (byte == 0x02 || byte == 0x03 || byte == 0x08 || byte == 0x09 ||
-                    byte == 0x0B) {
+                if (byte == 0x02 || byte == 0x03 || byte == 0x04 || byte == 0x08 ||
+                    byte == 0x09 || byte == 0x0B) {
                     rx_flag = 4;
                     rx_buffer[3] = byte;
                     rx_len = 0;

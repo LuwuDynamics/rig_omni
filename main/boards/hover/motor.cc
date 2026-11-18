@@ -8,7 +8,7 @@ float servo_voltage = 0.0;
 static float K_V = 60.0f * 3.1413f / 1024.0f;
 
 static void OnBusFrame(uint8_t id, const uint8_t *frame, uint8_t length_field) {
-    if (scs_decode_voltage(frame, length_field, &servo_voltage)) {
+    if (scs_decode_voltage(id, frame, length_field, &servo_voltage)) {
         return;
     }
     switch (id) {

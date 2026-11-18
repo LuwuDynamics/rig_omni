@@ -1,7 +1,11 @@
 #include "hover_debug_server.h"
 #include "robot.h"
 #include "imu.h"
+#include "motor.h"
+#include "board.h"
 #include <esp_http_server.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <esp_log.h>
 #include <cJSON.h>
 #include <string.h>
@@ -135,7 +139,26 @@ static esp_err_t index_handler(httpd_req_t *req) {
 
 // GET /api/data - 返回IMU和变量数据
 static esp_err_t data_handler(httpd_req_t *req) {
+    ReadServoVoltage(3);
+    for (int j = 0; j < 12; j++) {
+        motor_rx();
+        vTaskDelay(pdMS_TO_TICKS(3));
+    }
+
     cJSON *root = cJSON_CreateObject();
+
+    cJSON *bat = cJSON_CreateObject();
+    cJSON_AddNumberToObject(bat, "servo_voltage_v", (double)servo_voltage);
+    int level = 0;
+    bool charging = false;
+    bool discharging = false;
+    if (Board::GetInstance().GetBatteryLevel(level, charging, discharging)) {
+        cJSON_AddNumberToObject(bat, "level_pct", level);
+        cJSON_AddBoolToObject(bat, "valid", 1);
+    } else {
+        cJSON_AddBoolToObject(bat, "valid", 0);
+    }
+    cJSON_AddItemToObject(root, "battery", bat);
 
     cJSON *imu = cJSON_CreateObject();
     cJSON_AddNumberToObject(imu, "roll", roll);
