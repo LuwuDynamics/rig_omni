@@ -50,7 +50,7 @@ static void CheckMotorStall(uint8_t id) {
 }
 
 static void OnScs009Frame(uint8_t id, const uint8_t *frame, uint8_t length_field) {
-    if (scs_decode_voltage(frame, length_field, &servo_voltage)) {
+    if (scs_decode_voltage(id, frame, length_field, &servo_voltage)) {
         return;
     }
     if (id < 1 || id > MOTOR_NUM) {

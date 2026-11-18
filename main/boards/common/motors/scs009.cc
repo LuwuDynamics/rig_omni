@@ -32,6 +32,7 @@ void scs009_read_state(uint8_t id) {
 }
 
 void scs009_read_voltage(uint8_t id) {
+    scs_arm_voltage_read(id);
     scs_read(id, SCS009_PRESENT_VOLTAGE, 1);
 }
 

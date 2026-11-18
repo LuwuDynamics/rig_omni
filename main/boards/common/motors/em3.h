@@ -10,14 +10,15 @@ extern "C" {
 #endif
 
 /*
- * EM3 串口舵机（飞特 SCS 帧，小端）
+ * EM3（Energize Lab Primary 协议，帧格式同 SCS：FF FF ID LEN … CHK，多数字段小端）
+ * 寄存器见 EnergizeLab/ServoSDK PrimaryServo.h「Primary Memory Table」。
  * Puppy 五腿、Hover 云台（ID=3）使用本驱动。
  */
 enum {
-    EM3_TORQUE_ENABLE   = 0x30,
-    EM3_GOAL_POSITION   = 0x35,  /* 连续 6 字节：pos(2) vel(2) reserved(2)，小端 */
-    EM3_PRESENT_VOLTAGE = 0x40,
-    EM3_PRESENT_STATE   = 0x48,  /* 回读 6 字节 */
+    EM3_TORQUE_ENABLE    = 0x30, /* PRIMARY_TORQUE_SW */
+    EM3_GOAL_POSITION    = 0x35, /* PRIMARY_VELOCITY_BASE_TARGET_POSITION_L，vel 在 0x37 */
+    EM3_PRESENT_VOLTAGE  = 0x40, /* PRIMARY_PRESENT_VOLTAGE，1 字节，0.1V */
+    EM3_PRESENT_STATE    = 0x48,  /* 自 0x48 连读 6 字节：vel(2) pos(2) current(2) */
 };
 
 void em3_enable(uint8_t id, uint8_t mode);

@@ -302,18 +302,16 @@ void robot_control() {
         ReadWheelState(11);
     }else if(rx_index == 3){
         ReadWheelState(21);
-    }else{
+    } else {
         ReadMotorState(3);
+        static uint16_t voltage_counter_hover = 0;
+        if (++voltage_counter_hover % 30 == 0) {
+            ReadServoVoltage(3);
+        }
     }
     vTaskDelay(pdMS_TO_TICKS(2));
-    if(rx_index++>4){
+    if (rx_index++ > 4) {
         rx_index = 0;
-    }
-
-    // 每分钟读一次电池电压（约 7500 个周期）
-    static int voltage_counter_hover = 0;
-    if (++voltage_counter_hover % 7500 == 0) {
-        ReadServoVoltage(3);
     }
 
 }
@@ -409,12 +407,18 @@ void lulu_ble_on_rx_bytes(const uint8_t* data, size_t len) {
             resp_len = 8 + ver_len;
         } else if (addr == 0x01) {
             // battery: 返回电池电量 (0-100)
+            int level = 0;
+            bool charging = false;
+            bool discharging = false;
+            if (!Board::GetInstance().GetBatteryLevel(level, charging, discharging)) {
+                level = 0;
+            }
             resp[0] = 0x55;
             resp[1] = 0x00;
             resp[2] = 8;    // LENGTH
             resp[3] = 0x12; // READ_READBACK
             resp[4] = addr;
-            resp[5] = 100;  // 电池电量 100%
+            resp[5] = (uint8_t)level;
             uint32_t s = resp[2] + resp[3] + resp[4] + resp[5];
             resp[6] = (uint8_t)(0xFF - (s & 0xFF));
             resp[7] = 0x00;
