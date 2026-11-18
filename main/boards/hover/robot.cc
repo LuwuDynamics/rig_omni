@@ -302,18 +302,16 @@ void robot_control() {
         ReadWheelState(11);
     }else if(rx_index == 3){
         ReadWheelState(21);
-    }else{
+    } else {
         ReadMotorState(3);
+        static uint16_t voltage_counter_hover = 0;
+        if (++voltage_counter_hover % 30 == 0) {
+            ReadServoVoltage(3);
+        }
     }
     vTaskDelay(pdMS_TO_TICKS(2));
-    if(rx_index++>4){
+    if (rx_index++ > 4) {
         rx_index = 0;
-    }
-
-    // 每分钟读一次电池电压（约 7500 个周期）
-    static int voltage_counter_hover = 0;
-    if (++voltage_counter_hover % 7500 == 0) {
-        ReadServoVoltage(3);
     }
 
 }

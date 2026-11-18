@@ -8,6 +8,9 @@ float servo_voltage = 0.0;
 static float K_V = 60.0f * 3.1413f / 1024.0f;
 
 static void OnBusFrame(uint8_t id, const uint8_t *frame, uint8_t length_field) {
+    if (scs_decode_voltage(frame, length_field, &servo_voltage)) {
+        return;
+    }
     switch (id) {
         case 1:
         case 11: {
@@ -47,17 +50,13 @@ static void OnBusFrame(uint8_t id, const uint8_t *frame, uint8_t length_field) {
             last21Pos = temp_pos;
             break;
         }
-        case 3:
-            if (scs_decode_voltage(frame, length_field, &servo_voltage)) {
-                return;
-            }
-            {
-                int16_t pos = 0;
-                if (em3_decode_state(frame, length_field, &pos, nullptr, nullptr)) {
-                    q_head = (1500.0f - pos) / 10.0f;
-                }
+        case 3: {
+            int16_t pos = 0;
+            if (em3_decode_state(frame, length_field, &pos, nullptr, nullptr)) {
+                q_head = (1500.0f - pos) / 10.0f;
             }
             break;
+        }
         default:
             break;
     }
@@ -78,7 +77,7 @@ void motor_rx() {
         scs_bus_on_frame(OnBusFrame);
         registered = true;
     }
-    scs_bus_poll(0);
+    scs_bus_poll(5);
 }
 
 void WriteByte_P_V(uint8_t ID, short pos, short vel) {

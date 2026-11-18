@@ -16,7 +16,7 @@ extern "C" {
 enum {
     EM3_TORQUE_ENABLE   = 0x30,
     EM3_GOAL_POSITION   = 0x35,  /* 连续 6 字节：pos(2) vel(2) reserved(2)，小端 */
-    EM3_PRESENT_VOLTAGE = 0x40,
+    EM3_PRESENT_VOLTAGE = 0x3E,  /* 飞特 Present voltage，0x40 为异步写标志 */
     EM3_PRESENT_STATE   = 0x48,  /* 回读 6 字节 */
 };
 

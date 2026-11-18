@@ -467,9 +467,6 @@ public:
         InitializeUart();
         InitializeController();
 
-        // 立即读取一次电池电压，避免等待 60 秒才有电量数据
-        ReadServoVoltage(3);
-
         InitializeBootButton();
         
         // IMU 初始化
@@ -493,6 +490,13 @@ public:
             vTaskDelete(NULL);
         }, "motor_rx_task", 4096, this, 12, &motor_rx_task_handle_, 1);
         ESP_LOGI(TAG, "Robot control tasks created");
+
+        /* 等 motor_rx 就绪后再读电压，否则上电阶段回包会被丢弃 */
+        vTaskDelay(pdMS_TO_TICKS(300));
+        for (int i = 0; i < 5; i++) {
+            ReadServoVoltage(3);
+            vTaskDelay(pdMS_TO_TICKS(50));
+        }
 
         xTaskCreatePinnedToCore([](void* arg) {
             (void)arg;

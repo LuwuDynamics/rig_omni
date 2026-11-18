@@ -23,7 +23,7 @@ extern "C" {
 /*
  * 一帧：FF FF | ID | LEN | ...payload... | CHK
  * frame[3] 为 LEN；校验通过后回调。
- * LEN==3 一般为 1 字节电压；LEN==8/0x0B 为状态回读。
+ * LEN==2/3 为读 1 字节（电压）；LEN==8/9/0x0B 为状态或连续读回包。
  */
 typedef void (*scs_frame_cb_t)(uint8_t id, const uint8_t *frame, uint8_t length_field);
 
@@ -46,7 +46,7 @@ void scs_store_be16(uint8_t *out, uint16_t value);
 int16_t scs_load_le16(uint8_t lo, uint8_t hi);
 int16_t scs_load_be16(uint8_t hi, uint8_t lo);
 
-/* 电压回读：LEN==3 时 frame[5] 单位 0.1V。 */
+/* 电压回读：0.1V 量化后经轻量 EMA 写入 *volts。 */
 bool scs_decode_voltage(const uint8_t *frame, uint8_t length_field, float *volts);
 
 #ifdef __cplusplus
